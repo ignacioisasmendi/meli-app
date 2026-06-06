@@ -46,6 +46,7 @@
     "swr": "^2.4.0",
     "tailwind-merge": "^3.3.1",
     "tw-animate-css": "^1.3.3",
+    "vercel": "^54.9.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {

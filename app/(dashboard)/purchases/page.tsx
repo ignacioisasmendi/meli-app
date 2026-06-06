@@ -1,7 +1,10 @@
+import Link from 'next/link'
+import { Import } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { PurchaseFormDialog } from '@/components/purchases/purchase-form-dialog'
 import { PurchaseStatusSelect } from '@/components/purchases/purchase-status-select'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
   Table,
@@ -34,7 +37,17 @@ export default async function PurchasesPage() {
       <PageHeader
         title="Purchases"
         description="Register purchases and track shipments to availability."
-        action={<PurchaseFormDialog products={products} />}
+        action={
+          <div className="flex gap-2">
+            <Button asChild variant="outline">
+              <Link href="/purchases/import">
+                <Import className="size-4" />
+                Import order
+              </Link>
+            </Button>
+            <PurchaseFormDialog products={products} />
+          </div>
+        }
       />
 
       <Card className="overflow-hidden p-0">
