@@ -1,0 +1,261 @@
+// Mercado Libre Multi-Account Inventory & Operations System
+// Postgres (Supabase) + Prisma with the pg driver adapter.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum PurchaseStatus {
+  PURCHASED
+  IN_USA
+  IN_TRANSIT
+  CUSTOMS
+  WAREHOUSE
+  AVAILABLE
+}
+
+enum BatchStatus {
+  PURCHASED
+  IN_USA
+  IN_TRANSIT
+  CUSTOMS
+  WAREHOUSE
+  AVAILABLE
+}
+
+enum MovementType {
+  PURCHASE
+  SALE
+  ADJUSTMENT
+  RESERVE
+  RELEASE
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  SKIPPED
+}
+
+enum JobStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  auth0Sub  String   @unique
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+
+  mlAccounts MercadoLibreAccount[]
+
+  @@map("users")
+}
+
+model MercadoLibreAccount {
+  id           String   @id @default(cuid())
+  nickname     String
+  mlUserId     String   @unique
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  isActive     Boolean  @default(true)
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sales    Sale[]
+  listings MlListing[]
+
+  @@map("mercadolibre_accounts")
+}
+
+// ---------------------------------------------------------------------------
+// Catalog & inventory
+// ---------------------------------------------------------------------------
+
+model Product {
+  id             String   @id @default(cuid())
+  sku            String   @unique
+  name           String
+  brand          String?
+  currentStock   Int      @default(0)
+  reservedStock  Int      @default(0)
+  totalPurchased Int      @default(0)
+  totalSold      Int      @default(0)
+  averageCostUsd Float    @default(0)
+  minStock       Int      @default(5)
+  archived       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  purchases Purchase[]
+  batches   InventoryBatch[]
+  sales     Sale[]
+  movements InventoryMovement[]
+  listings  MlListing[]
+
+  @@index([archived])
+  @@map("products")
+}
+
+model Purchase {
+  id           String         @id @default(cuid())
+  productId    String
+  product      Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity     Int
+  unitCostUsd  Float
+  totalCostUsd Float
+  supplier     String?
+  invoiceUrl   String?
+  status       PurchaseStatus @default(PURCHASED)
+  purchasedAt  DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+
+  batches InventoryBatch[]
+
+  @@index([productId])
+  @@index([status])
+  @@map("purchases")
+}
+
+/// Every purchase creates a batch. Batches are the source of truth for unit
+/// cost (FIFO) and for "in transit" quantities until they become AVAILABLE.
+model InventoryBatch {
+  id                String      @id @default(cuid())
+  productId         String
+  product           Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  purchaseId        String?
+  purchase          Purchase?   @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  quantity          Int
+  remainingQuantity Int
+  unitCostUsd       Float
+  status            BatchStatus @default(PURCHASED)
+  purchasedAt       DateTime    @default(now())
+
+  @@index([productId])
+  @@index([status])
+  @@map("inventory_batches")
+}
+
+/// Maps a Mercado Libre listing (item) on a given account to an internal Product.
+model MlListing {
+  id        String              @id @default(cuid())
+  accountId String
+  account   MercadoLibreAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  mlItemId  String
+  productId String?
+  product   Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  sku       String?
+  title     String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([accountId, mlItemId])
+  @@index([productId])
+  @@map("ml_listings")
+}
+
+// ---------------------------------------------------------------------------
+// Sales & movements
+// ---------------------------------------------------------------------------
+
+model Sale {
+  id           String              @id @default(cuid())
+  mlOrderId    String              @unique
+  accountId    String
+  account      MercadoLibreAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity     Int
+  salePriceArs Float
+  feeArs       Float               @default(0)
+  shippingArs  Float               @default(0)
+  profitUsd    Float               @default(0)
+  soldAt       DateTime
+  createdAt    DateTime            @default(now())
+
+  @@index([accountId])
+  @@index([productId])
+  @@index([soldAt])
+  @@map("sales")
+}
+
+/// Audit log of every stock change. `referenceType`/`referenceId` point at the
+/// originating Purchase / Sale / adjustment.
+model InventoryMovement {
+  id            String       @id @default(cuid())
+  productId     String
+  product       Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type          MovementType
+  quantity      Int
+  referenceType String?
+  referenceId   String?
+  note          String?
+  createdAt     DateTime     @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+  @@map("inventory_movements")
+}
+
+// ---------------------------------------------------------------------------
+// Integration plumbing
+// ---------------------------------------------------------------------------
+
+/// Idempotent log of incoming ML webhook notifications.
+model WebhookEvent {
+  id          String        @id @default(cuid())
+  topic       String
+  resource    String
+  mlUserId    String?
+  status      WebhookStatus @default(RECEIVED)
+  payload     Json
+  error       String?
+  receivedAt  DateTime      @default(now())
+  processedAt DateTime?
+
+  @@unique([topic, resource])
+  @@index([status])
+  @@map("webhook_events")
+}
+
+/// Records cron runs (token refresh, daily summary) for observability / idempotency.
+model JobRun {
+  id         String    @id @default(cuid())
+  name       String
+  status     JobStatus @default(RUNNING)
+  detail     String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([name])
+  @@map("job_runs")
+}
+
+/// Key/value app settings (e.g. usdArsRate override).
+model Setting {
+  key   String @id
+  value String
+
+  @@map("settings")
+}
