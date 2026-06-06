@@ -16,7 +16,9 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle>Currency</CardTitle>
           <CardDescription>
-            Used to convert Mercado Libre revenue (ARS) into USD for profit calculations.
+            The USD/ARS rate auto-updates daily from Saldo (Zelle buy rate) — what it
+            costs you to buy USD. Used to convert Mercado Libre revenue (ARS) into USD
+            for profit. The manual value below is only a fallback if Saldo is unreachable.
           </CardDescription>
         </CardHeader>
         <CardContent>
