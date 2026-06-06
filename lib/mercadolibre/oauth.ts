@@ -39,6 +39,8 @@ export function buildAuthorizationUrl(state: string): string {
     client_id: clientId(),
     redirect_uri: redirectUri(),
     state,
+    // `offline_access` is required for ML to return a refresh_token.
+    scope: 'offline_access read write',
   })
   return `${AUTH_BASE}/authorization?${params.toString()}`
 }
