@@ -20,6 +20,24 @@ export function newSaleMessage(params: {
   ].join('\n')
 }
 
+export function unmappedSaleMessage(params: {
+  listingTitle: string
+  accountNickname: string
+  priceArs: number
+  mlItemId: string
+}): string {
+  return [
+    '⚠️ *Sale of an unmapped listing*',
+    '',
+    `*Listing:* ${params.listingTitle}`,
+    `*Account:* ${params.accountNickname}`,
+    `*Price:* ${formatArs(params.priceArs)}`,
+    `*Item:* ${params.mlItemId}`,
+    '',
+    '_Map it to a product to record stock & profit._',
+  ].join('\n')
+}
+
 export function lowStockMessage(params: {
   productName: string
   currentStock: number

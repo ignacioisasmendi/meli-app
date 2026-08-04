@@ -6,7 +6,7 @@ import { checkLowStock } from '@/lib/inventory/alerts'
 import { computeProfitWithRate } from '@/lib/inventory/profit'
 import { getInTransit, stockViewFrom } from '@/lib/inventory/stock'
 import { sendTelegramMessage } from '@/lib/telegram/client'
-import { newSaleMessage } from '@/lib/telegram/messages'
+import { newSaleMessage, unmappedSaleMessage } from '@/lib/telegram/messages'
 import { getOrder, getItem, getSellerItemIds, type MlOrder } from '@/lib/mercadolibre/client'
 
 /**
@@ -92,6 +92,16 @@ export async function processOrder(
         sku: line.item.seller_sku ?? null,
       },
     })
+    // Stock/profit can't be recorded for an unmapped item, but the sale still
+    // happened — alert so it isn't missed silently.
+    await sendTelegramMessage(
+      unmappedSaleMessage({
+        listingTitle: line.item.title,
+        accountNickname: account.nickname,
+        priceArs: line.unit_price * line.quantity,
+        mlItemId: line.item.id,
+      })
+    )
     return { status: 'skipped', reason: 'unmapped_item' }
   }
 

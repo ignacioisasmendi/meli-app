@@ -57,6 +57,16 @@ export async function updateProduct(
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' }
   }
 
+  const current = await prisma.product.findUnique({ where: { id } })
+  if (!current) return { ok: false, error: 'Product not found' }
+
+  // `sku` is unique — check before writing so a collision surfaces as a toast
+  // instead of an unhandled Prisma P2002.
+  if (parsed.data.sku && parsed.data.sku !== current.sku) {
+    const clash = await prisma.product.findUnique({ where: { sku: parsed.data.sku } })
+    if (clash) return { ok: false, error: `SKU "${parsed.data.sku}" already exists` }
+  }
+
   await prisma.product.update({
     where: { id },
     data: {
@@ -77,7 +87,11 @@ export async function setProductArchived(
   archived: boolean
 ): Promise<ActionResult> {
   await requireUser()
+  const current = await prisma.product.findUnique({ where: { id } })
+  if (!current) return { ok: false, error: 'Product not found' }
+
   await prisma.product.update({ where: { id }, data: { archived } })
   revalidatePath('/products')
+  revalidatePath(`/products/${id}`)
   return { ok: true }
 }

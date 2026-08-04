@@ -35,3 +35,6 @@ yarn-error.log*
 
 # uploads (dev)
 /public/uploads
+
+# Mercado Libre test-user credentials (passwords) — never commit
+ml-test-users.json

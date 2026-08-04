@@ -54,7 +54,13 @@ export default async function ProductDetailPage({
         description={`SKU ${product.sku}${product.brand ? ` · ${product.brand}` : ''}`}
         action={
           <ProductFormDialog
-            product={product}
+            product={{
+              id: product.id,
+              sku: product.sku,
+              name: product.name,
+              brand: product.brand,
+              minStock: product.minStock,
+            }}
             trigger={
               <Button variant="outline">
                 <Pencil className="size-4" />

@@ -1,10 +1,12 @@
 import Link from 'next/link'
+import { Pencil } from 'lucide-react'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { SearchInput } from '@/components/dashboard/search-input'
 import { ProductFormDialog } from '@/components/products/product-form-dialog'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
   Table,
@@ -66,12 +68,15 @@ export default async function ProductsPage({
               <TableHead className="text-right">In transit</TableHead>
               <TableHead className="text-right">Reserved</TableHead>
               <TableHead className="text-right">Avg cost</TableHead>
+              <TableHead className="w-12">
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {products.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   No products yet.
                 </TableCell>
               </TableRow>
@@ -105,6 +110,23 @@ export default async function ProductsPage({
                     {v.reserved}
                   </TableCell>
                   <TableCell className="text-right">{formatUsd(p.averageCostUsd)}</TableCell>
+                  <TableCell className="text-right">
+                    <ProductFormDialog
+                      product={{
+                        id: p.id,
+                        sku: p.sku,
+                        name: p.name,
+                        brand: p.brand,
+                        minStock: p.minStock,
+                      }}
+                      trigger={
+                        <Button variant="ghost" size="icon-sm">
+                          <Pencil className="size-4" />
+                          <span className="sr-only">Edit {p.name}</span>
+                        </Button>
+                      }
+                    />
+                  </TableCell>
                 </TableRow>
               )
             })}

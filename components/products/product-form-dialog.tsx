@@ -35,14 +35,18 @@ export function ProductFormDialog({ product, trigger }: ProductFormDialogProps) 
 
   function onSubmit(formData: FormData) {
     startTransition(async () => {
-      const result = editing
-        ? await updateProduct(product!.id, formData)
-        : await createProduct(formData)
-      if (result.ok) {
-        toast.success(editing ? 'Product updated' : 'Product created')
-        setOpen(false)
-      } else {
-        toast.error(result.error)
+      try {
+        const result = editing
+          ? await updateProduct(product!.id, formData)
+          : await createProduct(formData)
+        if (result.ok) {
+          toast.success(editing ? 'Product updated' : 'Product created')
+          setOpen(false)
+        } else {
+          toast.error(result.error)
+        }
+      } catch {
+        toast.error('Something went wrong. Please try again.')
       }
     })
   }

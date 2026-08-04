@@ -66,11 +66,27 @@ export interface MlOrder {
 export const getOrder = (account: MercadoLibreAccount, orderId: string) =>
   mlGet<MlOrder>(account, `/orders/${orderId}`)
 
-export const getItem = (account: MercadoLibreAccount, itemId: string) =>
-  mlGet<{ id: string; title: string; seller_custom_field?: string }>(
-    account,
-    `/items/${itemId}`
-  )
+interface MlItemRaw {
+  id: string
+  title: string
+  seller_custom_field?: string | null
+  attributes?: Array<{ id: string; value_name?: string | null }>
+}
+
+/**
+ * Fetches an item and normalizes its seller SKU. ML exposes the SKU either in
+ * the legacy `seller_custom_field` or as the `SELLER_SKU` attribute (newer
+ * listings use the attribute), so we read both and prefer whichever is set.
+ */
+export async function getItem(account: MercadoLibreAccount, itemId: string) {
+  const raw = await mlGet<MlItemRaw>(account, `/items/${itemId}`)
+  const attrSku = raw.attributes?.find((a) => a.id === 'SELLER_SKU')?.value_name
+  return {
+    id: raw.id,
+    title: raw.title,
+    seller_custom_field: raw.seller_custom_field ?? attrSku ?? null,
+  }
+}
 
 export const getShipment = (account: MercadoLibreAccount, shipmentId: string) =>
   mlGet<{ id: number; status: string }>(account, `/shipments/${shipmentId}`)
