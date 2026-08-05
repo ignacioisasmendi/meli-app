@@ -57,6 +57,8 @@ export async function registerPurchase(formData: FormData): Promise<ActionResult
         purchaseId: purchase.id,
         quantity,
         remainingQuantity: quantity,
+        // No import freight yet — a shipment folds that in when the box lands.
+        goodsUnitCostUsd: unitCostUsd,
         unitCostUsd,
         status: status as unknown as BatchStatus,
         purchasedAt,

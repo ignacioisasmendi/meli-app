@@ -21,7 +21,10 @@ export const dynamic = 'force-dynamic'
 export default async function PurchasesPage() {
   const [purchases, products] = await Promise.all([
     prisma.purchase.findMany({
-      include: { product: { select: { name: true, sku: true } } },
+      include: {
+        product: { select: { name: true, sku: true } },
+        batches: { select: { shipment: { select: { id: true, code: true } } }, take: 1 },
+      },
       orderBy: { purchasedAt: 'desc' },
       take: 200,
     }),
@@ -60,13 +63,14 @@ export default async function PurchasesPage() {
               <TableHead className="text-right">Unit cost</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Supplier</TableHead>
+              <TableHead>Shipment</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {purchases.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   No purchases yet.
                 </TableCell>
               </TableRow>
@@ -88,6 +92,18 @@ export default async function PurchasesPage() {
                   {formatUsd(p.totalCostUsd)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{p.supplier ?? '—'}</TableCell>
+                <TableCell>
+                  {p.batches[0]?.shipment ? (
+                    <Link
+                      href={`/shipments/${p.batches[0].shipment.id}`}
+                      className="text-sm hover:underline underline-offset-2"
+                    >
+                      {p.batches[0].shipment.code}
+                    </Link>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <PurchaseStatusSelect purchaseId={p.id} status={p.status} />
                 </TableCell>

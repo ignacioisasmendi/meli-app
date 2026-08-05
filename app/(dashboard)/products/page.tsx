@@ -118,6 +118,7 @@ export default async function ProductsPage({
                         name: p.name,
                         brand: p.brand,
                         minStock: p.minStock,
+                        weightLb: p.weightLb,
                       }}
                       trigger={
                         <Button variant="ghost" size="icon-sm">

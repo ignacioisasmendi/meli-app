@@ -41,6 +41,21 @@ enum MovementType {
   RELEASE
 }
 
+/// Lifecycle of a physical box travelling USA → Argentina.
+enum ShipmentStatus {
+  OPEN
+  IN_TRANSIT
+  ARRIVED
+  COSTED
+}
+
+/// How a shipment's freight bill is split across the batches inside it.
+enum AllocationBasis {
+  WEIGHT
+  VALUE
+  UNITS
+}
+
 enum WebhookStatus {
   RECEIVED
   PROCESSED
@@ -105,6 +120,10 @@ model Product {
   averageCostUsd Float    @default(0)
   minStock       Int      @default(5)
   archived       Boolean  @default(false)
+  /// Shipping weight of ONE unit, in pounds. Drives weight-based freight
+  /// allocation; when any product in a shipment is missing it, that shipment
+  /// falls back to allocating by value.
+  weightLb       Float?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -140,21 +159,66 @@ model Purchase {
 
 /// Every purchase creates a batch. Batches are the source of truth for unit
 /// cost (FIFO) and for "in transit" quantities until they become AVAILABLE.
+///
+/// Cost is stored in components so import freight can be folded in later,
+/// once the box lands and the courier bill is known:
+///   unitCostUsd (landed) = goodsUnitCostUsd + freightUnitCostUsd
+/// `unitCostUsd` stays the figure FIFO and profit math read, so the same batch
+/// of a product can carry a different landed cost in every shipment.
 model InventoryBatch {
-  id                String      @id @default(cuid())
-  productId         String
-  product           Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  purchaseId        String?
-  purchase          Purchase?   @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
-  quantity          Int
-  remainingQuantity Int
-  unitCostUsd       Float
-  status            BatchStatus @default(PURCHASED)
-  purchasedAt       DateTime    @default(now())
+  id                 String      @id @default(cuid())
+  productId          String
+  product            Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  purchaseId         String?
+  purchase           Purchase?   @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  shipmentId         String?
+  shipment           Shipment?   @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  quantity           Int
+  remainingQuantity  Int
+  /// Supplier price + that line's share of the supplier's own tax/shipping.
+  goodsUnitCostUsd   Float       @default(0)
+  /// This unit's share of the USA → Argentina freight bill.
+  freightUnitCostUsd Float       @default(0)
+  /// Landed cost = goods + freight. What FIFO consumes.
+  unitCostUsd        Float
+  /// True while `freightUnitCostUsd` comes from a shipment estimate rather
+  /// than the actual courier bill.
+  freightIsEstimate  Boolean     @default(false)
+  status             BatchStatus @default(PURCHASED)
+  purchasedAt        DateTime    @default(now())
 
   @@index([productId])
   @@index([status])
+  @@index([shipmentId])
   @@map("inventory_batches")
+}
+
+/// A physical box travelling USA → Argentina. Groups the batches that ship
+/// together so the courier bill — unknown until the box lands — can be split
+/// across them and folded into each unit's landed cost.
+model Shipment {
+  id            String          @id @default(cuid())
+  code          String          @unique
+  courier       String?
+  status        ShipmentStatus  @default(OPEN)
+  basis         AllocationBasis @default(WEIGHT)
+  /// Rough up-front guess, so in-transit goods can be priced before the bill
+  /// arrives. Superseded by the actuals below at costing time.
+  estimatedUsd  Float           @default(0)
+  freightUsd    Float?
+  customsUsd    Float?
+  otherUsd      Float?
+  notes         String?
+  departedAt    DateTime?
+  arrivedAt     DateTime?
+  costedAt      DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  batches InventoryBatch[]
+
+  @@index([status])
+  @@map("shipments")
 }
 
 /// Maps a Mercado Libre listing (item) on a given account to an internal Product.

@@ -2,11 +2,12 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { BatchStatus, PurchaseStatus } from '@prisma/client'
+import { BatchStatus, PurchaseStatus, ShipmentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/session'
 import { applyPurchase, recomputeAverageCost } from '@/lib/inventory/stock'
 import { allocateLandedCosts } from '@/lib/inventory/landed'
+import { SHIPMENT_TO_BATCH_STATUS } from '@/lib/inventory/shipment-costing'
 import { sendTelegramMessage } from '@/lib/telegram/client'
 import type { ActionResult } from '@/actions/products'
 
@@ -16,6 +17,8 @@ const importSchema = z.object({
   purchasedAt: z.string().optional(),
   tax: z.coerce.number().min(0).default(0),
   shipping: z.coerce.number().min(0).default(0),
+  /** Box these lines travel in. Its freight is applied later, on arrival. */
+  shipmentId: z.string().optional().or(z.literal('')),
   lines: z
     .array(
       z
@@ -37,9 +40,14 @@ const importSchema = z.object({
 export type ImportPayload = z.infer<typeof importSchema>
 
 /**
- * Bulk-imports manually-entered purchases. Tax + shipping are allocated across
- * lines (by value) into each line's per-unit cost, then a product is created
- * (when new) and a purchase + batch recorded through the stock pipeline.
+ * Bulk-imports manually-entered purchases. The supplier's own tax + shipping are
+ * allocated across lines (by value) into each line's per-unit cost, then a
+ * product is created (when new) and a purchase + batch recorded through the
+ * stock pipeline.
+ *
+ * That covers everything knowable at purchase time. The USA → Argentina freight
+ * is not — it arrives with the box — so lines can be dropped into a shipment
+ * here and re-costed later by `costShipment`.
  */
 export async function importPurchases(payload: ImportPayload): Promise<ActionResult> {
   await requireUser()
@@ -51,6 +59,17 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
   const purchasedAt = parsed.data.purchasedAt ? new Date(parsed.data.purchasedAt) : new Date()
   if (Number.isNaN(purchasedAt.getTime())) {
     return { ok: false, error: 'Invalid purchase date' }
+  }
+
+  const shipmentId = parsed.data.shipmentId || null
+  let batchStatus: BatchStatus = BatchStatus.PURCHASED
+  if (shipmentId) {
+    const shipment = await prisma.shipment.findUnique({ where: { id: shipmentId } })
+    if (!shipment) return { ok: false, error: 'Shipment not found' }
+    if (shipment.status === ShipmentStatus.COSTED) {
+      return { ok: false, error: 'That shipment is already costed — pick an open one' }
+    }
+    batchStatus = SHIPMENT_TO_BATCH_STATUS[shipment.status]
   }
 
   // Authoritative landed cost — recomputed server-side, never trusted from the client.
@@ -89,7 +108,7 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
             unitCostUsd,
             totalCostUsd,
             supplier,
-            status: PurchaseStatus.PURCHASED,
+            status: batchStatus as unknown as PurchaseStatus,
             purchasedAt,
           },
         })
@@ -97,10 +116,13 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
           data: {
             productId: productId!,
             purchaseId: purchase.id,
+            shipmentId,
             quantity: line.quantity,
             remainingQuantity: line.quantity,
+            // Freight is still unknown, so landed cost == goods cost for now.
+            goodsUnitCostUsd: unitCostUsd,
             unitCostUsd,
-            status: BatchStatus.PURCHASED,
+            status: batchStatus,
             purchasedAt,
           },
         })
@@ -129,5 +151,7 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
   revalidatePath('/purchases')
   revalidatePath('/inventory')
   revalidatePath('/products')
+  revalidatePath('/shipments')
+  if (shipmentId) revalidatePath(`/shipments/${shipmentId}`)
   return { ok: true }
 }

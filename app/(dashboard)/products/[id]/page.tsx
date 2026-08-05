@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Pencil } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
@@ -31,7 +32,10 @@ export default async function ProductDetailPage({
   const product = await prisma.product.findUnique({
     where: { id },
     include: {
-      batches: { orderBy: { purchasedAt: 'desc' } },
+      batches: {
+        include: { shipment: { select: { id: true, code: true } } },
+        orderBy: { purchasedAt: 'desc' },
+      },
       movements: { orderBy: { createdAt: 'desc' }, take: 50 },
     },
   })
@@ -60,6 +64,7 @@ export default async function ProductDetailPage({
               name: product.name,
               brand: product.brand,
               minStock: product.minStock,
+              weightLb: product.weightLb,
             }}
             trigger={
               <Button variant="outline">
@@ -93,14 +98,15 @@ export default async function ProductDetailPage({
                 <TableRow>
                   <TableHead>Qty</TableHead>
                   <TableHead>Remaining</TableHead>
-                  <TableHead>Unit cost</TableHead>
+                  <TableHead>Landed cost</TableHead>
+                  <TableHead>Shipment</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {product.batches.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                       No batches.
                     </TableCell>
                   </TableRow>
@@ -109,7 +115,28 @@ export default async function ProductDetailPage({
                   <TableRow key={b.id}>
                     <TableCell>{b.quantity}</TableCell>
                     <TableCell>{b.remainingQuantity}</TableCell>
-                    <TableCell>{formatUsd(b.unitCostUsd)}</TableCell>
+                    <TableCell>
+                      {formatUsd(b.unitCostUsd)}
+                      {b.freightUnitCostUsd > 0 && (
+                        <span className="block text-xs text-muted-foreground">
+                          {formatUsd(b.goodsUnitCostUsd)} + {formatUsd(b.freightUnitCostUsd)}{' '}
+                          freight
+                          {b.freightIsEstimate && ' (est.)'}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {b.shipment ? (
+                        <Link
+                          href={`/shipments/${b.shipment.id}`}
+                          className="text-sm hover:underline underline-offset-2"
+                        >
+                          {b.shipment.code}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <StatusBadge status={b.status} />
                     </TableCell>

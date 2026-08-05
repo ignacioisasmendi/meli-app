@@ -24,6 +24,7 @@ interface ProductFormDialogProps {
     name: string
     brand: string | null
     minStock: number
+    weightLb: number | null
   }
   trigger?: React.ReactNode
 }
@@ -83,15 +84,32 @@ export function ProductFormDialog({ product, trigger }: ProductFormDialogProps) 
               <Label htmlFor="brand">Brand</Label>
               <Input id="brand" name="brand" defaultValue={product?.brand ?? ''} />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="minStock">Minimum stock</Label>
-              <Input
-                id="minStock"
-                name="minStock"
-                type="number"
-                min={0}
-                defaultValue={product?.minStock ?? 5}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="minStock">Minimum stock</Label>
+                <Input
+                  id="minStock"
+                  name="minStock"
+                  type="number"
+                  min={0}
+                  defaultValue={product?.minStock ?? 5}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="weightLb">Unit weight (lb)</Label>
+                <Input
+                  id="weightLb"
+                  name="weightLb"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  defaultValue={product?.weightLb ?? ''}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used to split shipment freight. Leave blank to split by value instead.
+                </p>
+              </div>
             </div>
           </div>
 

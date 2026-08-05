@@ -15,8 +15,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PasteOrderImport } from '@/components/purchases/paste-order-import'
+import { ScannedOrderReview } from '@/components/purchases/scanned-order-review'
+import { ScreenshotDropzone } from '@/components/purchases/screenshot-dropzone'
 import { formatUsd } from '@/lib/utils'
 import { allocateLandedCosts } from '@/lib/inventory/landed'
+import { matchProduct, suggestSku } from '@/lib/imports/match-product'
+import type { ParsedOrder } from '@/lib/imports/amazon-order'
 import { importPurchases, type ImportPayload } from '@/actions/imports'
 
 interface ProductOption {
@@ -24,6 +30,14 @@ interface ProductOption {
   name: string
   sku: string
 }
+
+export interface ShipmentOption {
+  id: string
+  code: string
+  courier: string | null
+}
+
+const NO_SHIPMENT = '__none__'
 
 interface DraftLine {
   mode: 'existing' | 'new'
@@ -48,7 +62,17 @@ const num = (s: string) => {
   return Number.isFinite(n) ? n : 0
 }
 
-export function PurchaseImport({ products }: { products: ProductOption[] }) {
+export function PurchaseImport({
+  products,
+  shipments,
+  canUploadScreenshot,
+}: {
+  products: ProductOption[]
+  /** Shipments still open to receive purchases. */
+  shipments: ShipmentOption[]
+  /** The API import path only works when ANTHROPIC_API_KEY is configured. */
+  canUploadScreenshot: boolean
+}) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
@@ -57,10 +81,63 @@ export function PurchaseImport({ products }: { products: ProductOption[] }) {
   const [purchasedAt, setPurchasedAt] = useState('')
   const [tax, setTax] = useState('')
   const [shipping, setShipping] = useState('')
+  const [shipmentId, setShipmentId] = useState(NO_SHIPMENT)
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()])
+  const [scanned, setScanned] = useState<{ order: ParsedOrder; warnings: string[] } | null>(null)
 
   function patch(i: number, change: Partial<DraftLine>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...change } : l)))
+  }
+
+  /**
+   * Fills the form from a scanned order. Items that clearly match an existing
+   * product are mapped onto it; the rest become new products with a suggested
+   * SKU. Everything stays editable — nothing is saved until "Import".
+   */
+  function applyParsed(order: ParsedOrder, orderWarnings: string[]) {
+    if (order.items.length === 0) {
+      toast.error('No items were found in that order')
+      return
+    }
+
+    setSupplier('Amazon')
+    setOrderNumber(order.orderNumber ?? '')
+    setPurchasedAt(order.purchasedAt ?? '')
+    setTax(order.tax != null ? String(order.tax) : '')
+    setShipping(order.shipping != null ? String(order.shipping) : '')
+    setScanned({ order, warnings: orderWarnings })
+
+    const taken = new Set(products.map((p) => p.sku.toUpperCase()))
+    const scannedLines = order.items.map((item): DraftLine => {
+      const match = matchProduct(item.fullTitle || item.name, products)
+      if (match) {
+        return {
+          mode: 'existing',
+          productId: match.id,
+          sku: '',
+          name: match.name,
+          quantity: String(item.quantity),
+          unitPrice: String(item.unitPrice),
+        }
+      }
+      const sku = suggestSku(item.name, taken)
+      taken.add(sku)
+      return {
+        mode: 'new',
+        productId: '',
+        sku,
+        name: item.name,
+        quantity: String(item.quantity),
+        unitPrice: String(item.unitPrice),
+      }
+    })
+
+    setLines(scannedLines)
+    const matched = scannedLines.filter((l) => l.mode === 'existing').length
+    toast.success(
+      `Read ${scannedLines.length} item${scannedLines.length === 1 ? '' : 's'}` +
+        (matched > 0 ? ` — ${matched} matched to existing products` : '')
+    )
   }
 
   // Live preview of per-unit landed cost (tax + shipping allocated by value).
@@ -77,6 +154,7 @@ export function PurchaseImport({ products }: { products: ProductOption[] }) {
       purchasedAt: purchasedAt || undefined,
       tax: num(tax),
       shipping: num(shipping),
+      shipmentId: shipmentId === NO_SHIPMENT ? undefined : shipmentId,
       lines: lines.map((l) => ({
         mode: l.mode,
         productId: l.mode === 'existing' ? l.productId : undefined,
@@ -90,7 +168,7 @@ export function PurchaseImport({ products }: { products: ProductOption[] }) {
       const res = await importPurchases(payload)
       if (res.ok) {
         toast.success('Purchases imported')
-        router.push('/purchases')
+        router.push(shipmentId === NO_SHIPMENT ? '/purchases' : `/shipments/${shipmentId}`)
       } else {
         toast.error(res.error)
       }
@@ -99,6 +177,38 @@ export function PurchaseImport({ products }: { products: ProductOption[] }) {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Fill from an Amazon screenshot</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {canUploadScreenshot ? (
+            <Tabs defaultValue="paste">
+              <TabsList className="mb-4">
+                <TabsTrigger value="paste">Paste from Claude</TabsTrigger>
+                <TabsTrigger value="upload">Upload screenshot</TabsTrigger>
+              </TabsList>
+              <TabsContent value="paste">
+                <PasteOrderImport onParsed={applyParsed} disabled={pending} />
+              </TabsContent>
+              <TabsContent value="upload">
+                <ScreenshotDropzone onParsed={applyParsed} disabled={pending} />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <PasteOrderImport onParsed={applyParsed} disabled={pending} />
+          )}
+        </CardContent>
+      </Card>
+
+      {scanned && (
+        <ScannedOrderReview
+          order={scanned.order}
+          warnings={scanned.warnings}
+          onDismiss={() => setScanned(null)}
+        />
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Order details</CardTitle>
@@ -151,6 +261,28 @@ export function PurchaseImport({ products }: { products: ProductOption[] }) {
                 placeholder="0.00"
               />
             </div>
+          </div>
+
+          <div className="grid gap-2 sm:col-span-2 lg:col-span-4">
+            <Label htmlFor="shipment">Shipment</Label>
+            <Select value={shipmentId} onValueChange={setShipmentId}>
+              <SelectTrigger id="shipment" className="lg:w-1/2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SHIPMENT}>Not in a shipment yet</SelectItem>
+                {shipments.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.code}
+                    {s.courier ? ` · ${s.courier}` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              The tax and shipping above are Amazon’s. Import freight is added later, when
+              the box lands and you enter the courier bill on the shipment.
+            </p>
           </div>
         </CardContent>
       </Card>

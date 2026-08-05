@@ -10,6 +10,11 @@ const productSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
   brand: z.string().trim().optional().or(z.literal('')),
   minStock: z.coerce.number().int().min(0).default(5),
+  // Blank is meaningful: it means "no weight on file", which makes shipments
+  // holding this product fall back to splitting freight by value.
+  weightLb: z
+    .union([z.literal(''), z.coerce.number().positive('Weight must be positive')])
+    .optional(),
 })
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -21,6 +26,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
     name: formData.get('name'),
     brand: formData.get('brand'),
     minStock: formData.get('minStock'),
+    weightLb: formData.get('weightLb'),
   })
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' }
@@ -35,6 +41,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
       name: parsed.data.name,
       brand: parsed.data.brand || null,
       minStock: parsed.data.minStock,
+      weightLb: parsed.data.weightLb || null,
     },
   })
 
@@ -52,6 +59,7 @@ export async function updateProduct(
     name: formData.get('name') ?? undefined,
     brand: formData.get('brand') ?? undefined,
     minStock: formData.get('minStock') ?? undefined,
+    weightLb: formData.get('weightLb') ?? undefined,
   })
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' }
@@ -74,6 +82,9 @@ export async function updateProduct(
       ...(parsed.data.name ? { name: parsed.data.name } : {}),
       ...(parsed.data.brand !== undefined ? { brand: parsed.data.brand || null } : {}),
       ...(parsed.data.minStock !== undefined ? { minStock: parsed.data.minStock } : {}),
+      ...(parsed.data.weightLb !== undefined
+        ? { weightLb: parsed.data.weightLb || null }
+        : {}),
     },
   })
 

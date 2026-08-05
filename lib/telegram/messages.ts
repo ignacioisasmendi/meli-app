@@ -68,6 +68,23 @@ export function purchaseRegisteredMessage(params: {
   ].join('\n')
 }
 
+export function shipmentCostedMessage(params: {
+  code: string
+  totalBillUsd: number
+  batchCount: number
+  productCount: number
+}): string {
+  return [
+    '✈️ *Shipment Costed*',
+    '',
+    `*Shipment:* ${params.code}`,
+    `*Freight + customs:* ${formatUsd(params.totalBillUsd)}`,
+    `*Spread over:* ${params.batchCount} batch${params.batchCount === 1 ? '' : 'es'} · ${params.productCount} product${params.productCount === 1 ? '' : 's'}`,
+    '',
+    '_Landed costs updated — stock is now available._',
+  ].join('\n')
+}
+
 export function dailySummaryMessage(params: {
   sales: number
   revenueArs: number
