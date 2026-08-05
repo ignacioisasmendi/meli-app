@@ -12,7 +12,7 @@ const productSchema = z.object({
   minStock: z.coerce.number().int().min(0).default(5),
   // Blank is meaningful: it means "no weight on file", which makes shipments
   // holding this product fall back to splitting freight by value.
-  weightLb: z
+  weightGrams: z
     .union([z.literal(''), z.coerce.number().positive('Weight must be positive')])
     .optional(),
 })
@@ -26,7 +26,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
     name: formData.get('name'),
     brand: formData.get('brand'),
     minStock: formData.get('minStock'),
-    weightLb: formData.get('weightLb'),
+    weightGrams: formData.get('weightGrams'),
   })
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' }
@@ -41,7 +41,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
       name: parsed.data.name,
       brand: parsed.data.brand || null,
       minStock: parsed.data.minStock,
-      weightLb: parsed.data.weightLb || null,
+      weightGrams: parsed.data.weightGrams || null,
     },
   })
 
@@ -59,7 +59,7 @@ export async function updateProduct(
     name: formData.get('name') ?? undefined,
     brand: formData.get('brand') ?? undefined,
     minStock: formData.get('minStock') ?? undefined,
-    weightLb: formData.get('weightLb') ?? undefined,
+    weightGrams: formData.get('weightGrams') ?? undefined,
   })
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' }
@@ -82,8 +82,8 @@ export async function updateProduct(
       ...(parsed.data.name ? { name: parsed.data.name } : {}),
       ...(parsed.data.brand !== undefined ? { brand: parsed.data.brand || null } : {}),
       ...(parsed.data.minStock !== undefined ? { minStock: parsed.data.minStock } : {}),
-      ...(parsed.data.weightLb !== undefined
-        ? { weightLb: parsed.data.weightLb || null }
+      ...(parsed.data.weightGrams !== undefined
+        ? { weightGrams: parsed.data.weightGrams || null }
         : {}),
     },
   })

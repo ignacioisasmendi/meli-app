@@ -77,7 +77,7 @@ export function PurchaseFormDialog({ products }: { products: ProductOption[] }) 
                 <SelectContent>
                   {products.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.name} ({p.sku})
+                      {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

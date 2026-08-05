@@ -24,7 +24,7 @@ interface ProductFormDialogProps {
     name: string
     brand: string | null
     minStock: number
-    weightLb: number | null
+    weightGrams: number | null
   }
   trigger?: React.ReactNode
 }
@@ -96,15 +96,15 @@ export function ProductFormDialog({ product, trigger }: ProductFormDialogProps) 
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="weightLb">Unit weight (lb)</Label>
+                <Label htmlFor="weightGrams">Unit weight (g)</Label>
                 <Input
-                  id="weightLb"
-                  name="weightLb"
+                  id="weightGrams"
+                  name="weightGrams"
                   type="number"
-                  step="0.01"
+                  step="1"
                   min={0}
-                  defaultValue={product?.weightLb ?? ''}
-                  placeholder="0.00"
+                  defaultValue={product?.weightGrams ?? ''}
+                  placeholder="0"
                 />
                 <p className="text-xs text-muted-foreground">
                   Used to split shipment freight. Leave blank to split by value instead.

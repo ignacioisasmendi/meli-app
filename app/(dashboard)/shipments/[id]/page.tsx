@@ -99,7 +99,7 @@ export default async function ShipmentDetailPage({
           productId: b.productId,
           productName: b.product.name,
           sku: b.product.sku,
-          weightLb: b.product.weightLb,
+          weightGrams: b.product.weightGrams,
           quantity: b.quantity,
           goodsUnitCostUsd: b.goodsUnitCostUsd,
           unitCostUsd: b.unitCostUsd,

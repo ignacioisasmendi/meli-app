@@ -39,3 +39,9 @@ export function formatNumber(value: number): string {
 export function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`
 }
+
+/** Weight in grams, switching to kg once that reads better: 850 g / 2,4 kg */
+export function formatGrams(grams: number): string {
+  if (grams >= 1000) return `${formatNumber(Math.round(grams / 10) / 100)} kg`
+  return `${formatNumber(Math.round(grams))} g`
+}

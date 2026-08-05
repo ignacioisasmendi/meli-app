@@ -16,8 +16,8 @@ import { AllocationBasis } from '@prisma/client'
 
 export interface FreightLine {
   quantity: number
-  /** Weight of ONE unit, in pounds. `null` when the product has none on file. */
-  unitWeightLb: number | null
+  /** Weight of ONE unit, in grams. `null` when the product has none on file. */
+  unitWeightGrams: number | null
   /** Supplier cost of one unit, ex-freight. */
   goodsUnitCostUsd: number
 }
@@ -51,8 +51,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 
 const qtyOf = (l: FreightLine) => Math.max(0, Math.round(l.quantity))
 
-/** Per-line weight for the split: unit weight × quantity. */
-const weightOf = (l: FreightLine) => Math.max(0, l.unitWeightLb ?? 0) * qtyOf(l)
+/** Per-line weight for the split: unit weight × quantity, in grams. */
+const weightOf = (l: FreightLine) => Math.max(0, l.unitWeightGrams ?? 0) * qtyOf(l)
 
 /** Per-line value for the split: goods cost × quantity. */
 const valueOf = (l: FreightLine) => Math.max(0, l.goodsUnitCostUsd) * qtyOf(l)
@@ -75,7 +75,9 @@ export function resolveBasis(
   const hasValue = lines.reduce((s, l) => s + valueOf(l), 0) > 0
 
   if (preferred === AllocationBasis.WEIGHT) {
-    const missing = lines.filter((l) => l.unitWeightLb == null || l.unitWeightLb <= 0).length
+    const missing = lines.filter(
+      (l) => l.unitWeightGrams == null || l.unitWeightGrams <= 0
+    ).length
     if (missing === 0) return { basis: AllocationBasis.WEIGHT, fallbackReason: null }
     return {
       basis: hasValue ? AllocationBasis.VALUE : AllocationBasis.UNITS,

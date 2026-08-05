@@ -120,10 +120,10 @@ model Product {
   averageCostUsd Float    @default(0)
   minStock       Int      @default(5)
   archived       Boolean  @default(false)
-  /// Shipping weight of ONE unit, in pounds. Drives weight-based freight
+  /// Shipping weight of ONE unit, in grams. Drives weight-based freight
   /// allocation; when any product in a shipment is missing it, that shipment
   /// falls back to allocating by value.
-  weightLb       Float?
+  weightGrams    Float?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatUsd } from '@/lib/utils'
+import { formatGrams, formatUsd } from '@/lib/utils'
 import { ALLOCATION_BASIS_HINTS, ALLOCATION_BASIS_OPTIONS } from '@/lib/statuses'
 import { allocateFreight } from '@/lib/inventory/shipment'
 import { applyEstimate, assignBatches, costShipment, reopenShipment } from '@/actions/shipments'
@@ -35,7 +35,7 @@ export interface CostingBatch {
   productId: string
   productName: string
   sku: string
-  weightLb: number | null
+  weightGrams: number | null
   quantity: number
   goodsUnitCostUsd: number
   unitCostUsd: number
@@ -87,7 +87,7 @@ export function ShipmentCosting({
       allocateFreight(
         batches.map((b) => ({
           quantity: b.quantity,
-          unitWeightLb: b.weightLb,
+          unitWeightGrams: b.weightGrams,
           goodsUnitCostUsd: b.goodsUnitCostUsd,
         })),
         bill,
@@ -159,7 +159,7 @@ export function ShipmentCosting({
     })
   }
 
-  const missingWeights = batches.filter((b) => b.weightLb == null || b.weightLb <= 0)
+  const missingWeights = batches.filter((b) => b.weightGrams == null || b.weightGrams <= 0)
 
   return (
     <Card>
@@ -304,7 +304,7 @@ export function ShipmentCosting({
                     </TableCell>
                     <TableCell className="text-right">{b.quantity}</TableCell>
                     <TableCell className="text-right text-muted-foreground">
-                      {b.weightLb ? `${(b.weightLb * b.quantity).toFixed(2)} lb` : '—'}
+                      {b.weightGrams ? formatGrams(b.weightGrams * b.quantity) : '—'}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       {(line.share * 100).toFixed(1)}%

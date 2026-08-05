@@ -40,7 +40,7 @@ export interface CostingSummary {
 export const shipmentWithBatches = {
   batches: {
     include: {
-      product: { select: { id: true, name: true, sku: true, weightLb: true } },
+      product: { select: { id: true, name: true, sku: true, weightGrams: true } },
     },
     orderBy: { purchasedAt: 'asc' },
   },
@@ -54,7 +54,7 @@ export type ShipmentWithBatches = Prisma.ShipmentGetPayload<{
 export function toFreightLines(shipment: ShipmentWithBatches): FreightLine[] {
   return shipment.batches.map((b) => ({
     quantity: b.quantity,
-    unitWeightLb: b.product.weightLb,
+    unitWeightGrams: b.product.weightGrams,
     goodsUnitCostUsd: b.goodsUnitCostUsd,
   }))
 }

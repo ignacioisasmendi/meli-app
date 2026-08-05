@@ -64,7 +64,7 @@ export default async function ProductDetailPage({
               name: product.name,
               brand: product.brand,
               minStock: product.minStock,
-              weightLb: product.weightLb,
+              weightGrams: product.weightGrams,
             }}
             trigger={
               <Button variant="outline">
