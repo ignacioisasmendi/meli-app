@@ -4,6 +4,7 @@ import { Pencil } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { ProductFormDialog } from '@/components/products/product-form-dialog'
+import { ProductThumb } from '@/components/products/product-thumb'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -56,6 +57,7 @@ export default async function ProductDetailPage({
       <PageHeader
         title={product.name}
         description={`SKU ${product.sku}${product.brand ? ` · ${product.brand}` : ''}`}
+        leading={<ProductThumb src={product.imageUrl} alt="" size={56} />}
         action={
           <ProductFormDialog
             product={{

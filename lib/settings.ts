@@ -1,9 +1,11 @@
 import { prisma } from '@/lib/prisma'
-import { getZelleArsRate } from '@/lib/saldo/client'
+import { getSaldoUsdArsRate } from '@/lib/saldo/client'
 
 const USD_ARS_RATE_KEY = 'usdArsRate' // manual fallback override
-const SALDO_RATE_KEY = 'saldoZelleRate' // last auto-fetched Saldo→Zelle buy rate
-const SALDO_RATE_DATE_KEY = 'saldoZelleRateDate' // AR date (YYYY-MM-DD) of that value
+// Keys are pair-specific on purpose: switching pairs must not resurrect a
+// cached value from the old one for the rest of the day.
+const SALDO_RATE_KEY = 'saldoBancoUsdRate' // last auto-fetched Saldo USD buy rate
+const SALDO_RATE_DATE_KEY = 'saldoBancoUsdRateDate' // AR date (YYYY-MM-DD) of that value
 const DEFAULT_RATE = 1000
 
 /** Today's date in Argentina, as YYYY-MM-DD (en-CA formats that way). */
@@ -31,8 +33,8 @@ async function writeSetting(key: string, value: string): Promise<void> {
 /**
  * Current USD/ARS rate used by all profit calculations.
  *
- * Primary source is the live Saldo→Zelle buy rate (what it actually costs to buy
- * USD via Zelle), refreshed at most once per Argentina day and cached in
+ * Primary source is the live Saldo USD buy rate (what it actually costs us to
+ * buy dollars), refreshed at most once per Argentina day and cached in
  * `Setting`. If the Saldo API is unavailable, falls back to the last cached
  * value, then the manual `usdArsRate` override, then `USD_ARS_RATE`, then a
  * default.
@@ -47,7 +49,7 @@ export async function getUsdArsRate(): Promise<number> {
   if (cached && cachedDate?.value === today) return cached
 
   try {
-    const { buyUsdArs } = await getZelleArsRate()
+    const { buyUsdArs } = await getSaldoUsdArsRate()
     if (Number.isFinite(buyUsdArs) && buyUsdArs > 0) {
       await Promise.all([
         writeSetting(SALDO_RATE_KEY, String(buyUsdArs)),
@@ -68,8 +70,8 @@ export async function getUsdArsRate(): Promise<number> {
 }
 
 /** Forces a fresh fetch from Saldo and updates the daily cache. */
-export async function refreshSaldoZelleRate(): Promise<number> {
-  const { buyUsdArs } = await getZelleArsRate()
+export async function refreshSaldoRate(): Promise<number> {
+  const { buyUsdArs } = await getSaldoUsdArsRate()
   await Promise.all([
     writeSetting(SALDO_RATE_KEY, String(buyUsdArs)),
     writeSetting(SALDO_RATE_DATE_KEY, argentinaToday()),

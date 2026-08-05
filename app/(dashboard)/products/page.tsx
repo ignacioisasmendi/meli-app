@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { SearchInput } from '@/components/dashboard/search-input'
 import { ProductFormDialog } from '@/components/products/product-form-dialog'
+import { ProductThumb } from '@/components/products/product-thumb'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -61,6 +62,9 @@ export default async function ProductsPage({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-14">
+                <span className="sr-only">Image</span>
+              </TableHead>
               <TableHead>SKU</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Brand</TableHead>
@@ -76,7 +80,7 @@ export default async function ProductsPage({
           <TableBody>
             {products.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                   No products yet.
                 </TableCell>
               </TableRow>
@@ -86,6 +90,9 @@ export default async function ProductsPage({
               const low = v.available <= p.minStock
               return (
                 <TableRow key={p.id} className="cursor-default">
+                  <TableCell>
+                    <ProductThumb src={p.imageUrl} alt="" />
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{p.sku}</TableCell>
                   <TableCell className="font-medium">
                     <Link href={`/products/${p.id}`} className="hover:underline">

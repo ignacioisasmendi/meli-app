@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatDate } from '@/lib/utils'
 import { getShipment } from '@/lib/inventory/shipment-costing'
+import { getUsdArsRate } from '@/lib/settings'
 import { SHIPMENT_STATUS_LABELS } from '@/lib/statuses'
 
 export const dynamic = 'force-dynamic'
@@ -20,7 +21,7 @@ export default async function ShipmentDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const shipment = await getShipment(id)
+  const [shipment, usdArsRate] = await Promise.all([getShipment(id), getUsdArsRate()])
   if (!shipment) notFound()
 
   const costed = shipment.status === ShipmentStatus.COSTED
@@ -94,6 +95,9 @@ export default async function ShipmentDetailPage({
         freightUsd={shipment.freightUsd}
         customsUsd={shipment.customsUsd}
         otherUsd={shipment.otherUsd}
+        localShippingArs={shipment.localShippingArs}
+        localShippingRate={shipment.localShippingRate}
+        usdArsRate={usdArsRate}
         batches={shipment.batches.map((b) => ({
           id: b.id,
           productId: b.productId,

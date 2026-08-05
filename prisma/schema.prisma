@@ -39,6 +39,7 @@ enum MovementType {
   ADJUSTMENT
   RESERVE
   RELEASE
+  RETURN
 }
 
 /// Lifecycle of a physical box travelling USA → Argentina.
@@ -54,6 +55,26 @@ enum AllocationBasis {
   WEIGHT
   VALUE
   UNITS
+}
+
+/// What became of a sale after it was recorded.
+///
+/// The three "money is going back" states differ only in what happens to the
+/// units, which is the whole reason they are separate:
+///   CANCELLED      — killed before it shipped, so the units never left and go
+///                    straight back to sellable stock.
+///   RETURN_PENDING — buyer is sending it back. Revenue is reversed now; stock
+///                    stays out until the box is physically in hand, so we
+///                    can't oversell something still in the mail.
+///   REFUNDED       — buyer was refunded but nothing comes back (ML sometimes
+///                    refunds and lets them keep the item). Money out, no stock.
+/// RETURNED is the terminal state of RETURN_PENDING once goods are received.
+enum SaleStatus {
+  CONFIRMED
+  CANCELLED
+  RETURN_PENDING
+  RETURNED
+  REFUNDED
 }
 
 enum WebhookStatus {
@@ -124,6 +145,11 @@ model Product {
   /// allocation; when any product in a shipment is missing it, that shipment
   /// falls back to allocating by value.
   weightGrams    Float?
+  /// Identification thumbnail. Backfilled from the linked ML listing's first
+  /// picture by `syncAccountListings`, which only ever fills a NULL — so a
+  /// hand-picked image is never overwritten by a later sync. Purely cosmetic:
+  /// nothing in stock or costing reads it.
+  imageUrl       String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -187,6 +213,8 @@ model InventoryBatch {
   status             BatchStatus @default(PURCHASED)
   purchasedAt        DateTime    @default(now())
 
+  saleConsumptions SaleBatchConsumption[]
+
   @@index([productId])
   @@index([status])
   @@index([shipmentId])
@@ -197,23 +225,31 @@ model InventoryBatch {
 /// together so the courier bill — unknown until the box lands — can be split
 /// across them and folded into each unit's landed cost.
 model Shipment {
-  id            String          @id @default(cuid())
-  code          String          @unique
-  courier       String?
-  status        ShipmentStatus  @default(OPEN)
-  basis         AllocationBasis @default(WEIGHT)
+  id                String          @id @default(cuid())
+  code              String          @unique
+  courier           String?
+  status            ShipmentStatus  @default(OPEN)
+  basis             AllocationBasis @default(WEIGHT)
   /// Rough up-front guess, so in-transit goods can be priced before the bill
   /// arrives. Superseded by the actuals below at costing time.
-  estimatedUsd  Float           @default(0)
-  freightUsd    Float?
-  customsUsd    Float?
-  otherUsd      Float?
-  notes         String?
-  departedAt    DateTime?
-  arrivedAt     DateTime?
-  costedAt      DateTime?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  estimatedUsd      Float           @default(0)
+  freightUsd        Float?
+  customsUsd        Float?
+  otherUsd          Float?
+  /// Domestic delivery once the box is in the country. Billed in pesos, so it
+  /// is entered in ARS and converted at costing time. The rate used is frozen
+  /// on the shipment (`localShippingRate`) and the converted figure stored
+  /// (`localShippingUsd`) — otherwise re-costing later, at a different rate,
+  /// would silently move landed costs that are already booked.
+  localShippingArs  Float?
+  localShippingUsd  Float?
+  localShippingRate Float?
+  notes             String?
+  departedAt        DateTime?
+  arrivedAt         DateTime?
+  costedAt          DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   batches InventoryBatch[]
 
@@ -243,6 +279,15 @@ model MlListing {
 // Sales & movements
 // ---------------------------------------------------------------------------
 
+/// A sale mirrors an ML order. `quantity` / `salePriceArs` / `feeArs` /
+/// `shippingArs` / `profitUsd` are the GROSS figures as ML reported them and are
+/// never rewritten — a cancellation or return is recorded alongside them in the
+/// `reversed*` / `refunded*` columns instead.
+///
+/// That split is what lets every aggregate stay a single query: net revenue is
+/// `SUM(salePriceArs) - SUM(refundedArs)` and net profit is
+/// `SUM(profitUsd) - SUM(reversedProfitUsd)`, so adding a reversal never means
+/// re-reading rows to correct them. See `netRevenueArs` in `lib/inventory/returns.ts`.
 model Sale {
   id           String              @id @default(cuid())
   mlOrderId    String              @unique
@@ -255,13 +300,64 @@ model Sale {
   feeArs       Float               @default(0)
   shippingArs  Float               @default(0)
   profitUsd    Float               @default(0)
+  /// FIFO cost of goods sold, as `applySale` valued it at sale time. Stored
+  /// because it can't be recovered later: batches get re-costed and the USD/ARS
+  /// rate moves, so a refund-without-return months on would otherwise have to
+  /// guess what these units cost.
+  costUsd      Float               @default(0)
   soldAt       DateTime
   createdAt    DateTime            @default(now())
+
+  status SaleStatus @default(CONFIRMED)
+  /// Units reversed so far. Less than `quantity` on a partial return.
+  returnedQuantity Int        @default(0)
+  /// Units already back on the shelf. Trails `returnedQuantity` while goods are
+  /// in the mail, and stays behind it permanently for a write-off.
+  restockedQuantity Int       @default(0)
+  /// Gross revenue handed back to the buyer.
+  refundedArs       Float     @default(0)
+  /// Profit backed out of reporting.
+  reversedProfitUsd Float     @default(0)
+  /// The ML claim that triggered this, when it came from post-purchase rather
+  /// than an outright order cancellation.
+  mlClaimId         String?
+  reversalReason    String?
+  reversedAt        DateTime?
+
+  consumptions SaleBatchConsumption[]
 
   @@index([accountId])
   @@index([productId])
   @@index([soldAt])
+  @@index([status])
+  @@index([mlClaimId])
   @@map("sales")
+}
+
+/// Which batches a sale actually consumed, and at what landed cost.
+///
+/// `applySale` walks batches FIFO and then forgets which ones it touched. That
+/// is fine until stock has to come *back*: putting returned units on the wrong
+/// batch would silently rewrite COGS, because batches of the same product carry
+/// different landed costs. Recording the split makes a reversal exact — and
+/// doubles as the per-sale COGS audit trail.
+model SaleBatchConsumption {
+  id      String         @id @default(cuid())
+  saleId  String
+  sale    Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  batchId String?
+  batch   InventoryBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  quantity    Int
+  /// Frozen copy of the batch's landed cost at consumption time, so reversal
+  /// value survives the batch being re-costed or deleted.
+  unitCostUsd Float
+  /// Units of this line already restored.
+  restoredQuantity Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([saleId])
+  @@index([batchId])
+  @@map("sale_batch_consumptions")
 }
 
 /// Audit log of every stock change. `referenceType`/`referenceId` point at the
@@ -287,10 +383,24 @@ model InventoryMovement {
 // ---------------------------------------------------------------------------
 
 /// Idempotent log of incoming ML webhook notifications.
+///
+/// Deduped on `(topic, resource, sentAt)` rather than `(topic, resource)`. ML
+/// re-notifies the *same* resource on every state change — `/orders/123` fires
+/// again when that order is cancelled — so keying on the resource alone made a
+/// processed sale deafen us to its own cancellation. `sent` is stable across
+/// ML's delivery retries but differs per state change, which is exactly the
+/// line we want to dedupe on.
 model WebhookEvent {
-  id          String        @id @default(cuid())
-  topic       String
-  resource    String
+  /// `topic|resource|sent`. A single non-null column rather than a compound
+  /// unique over `sentAt`, because Postgres treats NULLs as distinct — a
+  /// nullable member would make the constraint stop deduping exactly for the
+  /// payloads that omit `sent`.
+  dedupeKey String @unique
+  id        String @id @default(cuid())
+  topic     String
+  resource  String
+  /// The notification's own `sent` timestamp, kept for debugging delivery order.
+  sentAt      DateTime?
   mlUserId    String?
   status      WebhookStatus @default(RECEIVED)
   payload     Json
@@ -298,8 +408,8 @@ model WebhookEvent {
   receivedAt  DateTime      @default(now())
   processedAt DateTime?
 
-  @@unique([topic, resource])
   @@index([status])
+  @@index([topic, resource])
   @@map("webhook_events")
 }
 

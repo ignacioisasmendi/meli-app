@@ -96,6 +96,7 @@ export default async function ReportsPage() {
                   <TableHead>Date</TableHead>
                   <TableHead>Product</TableHead>
                   <TableHead>Account</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
                   <TableHead className="text-right">Revenue</TableHead>
                   <TableHead className="text-right">Profit (USD)</TableHead>
@@ -107,6 +108,9 @@ export default async function ReportsPage() {
                     <TableCell className="text-muted-foreground">{formatDate(r.date)}</TableCell>
                     <TableCell className="font-medium">{r.product}</TableCell>
                     <TableCell>{r.account}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={r.status} />
+                    </TableCell>
                     <TableCell className="text-right">{r.quantity}</TableCell>
                     <TableCell className="text-right">{formatArs(r.revenueArs)}</TableCell>
                     <TableCell className="text-right">{formatUsd(r.profitUsd)}</TableCell>

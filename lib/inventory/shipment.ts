@@ -138,15 +138,28 @@ export function allocateFreight(
   return { lines: allocated, basis, fallbackReason, residualUsd }
 }
 
-/** Sum of a shipment's cost fields — the number that gets allocated. */
+/**
+ * Sum of a shipment's cost fields — the number that gets allocated.
+ *
+ * Local delivery is included from `localShippingUsd`, the figure frozen at
+ * costing time, never re-derived from the pesos at today's rate.
+ */
 export function shipmentBill(shipment: {
   freightUsd: number | null
   customsUsd: number | null
   otherUsd: number | null
+  localShippingUsd?: number | null
 }): number {
   return round2(
     Math.max(0, shipment.freightUsd ?? 0) +
       Math.max(0, shipment.customsUsd ?? 0) +
-      Math.max(0, shipment.otherUsd ?? 0)
+      Math.max(0, shipment.otherUsd ?? 0) +
+      Math.max(0, shipment.localShippingUsd ?? 0)
   )
+}
+
+/** Pesos → USD at a given ARS-per-USD rate, rounded to cents. */
+export function arsToUsd(ars: number, usdArsRate: number): number {
+  if (!(usdArsRate > 0)) return 0
+  return round2(Math.max(0, ars) / usdArsRate)
 }

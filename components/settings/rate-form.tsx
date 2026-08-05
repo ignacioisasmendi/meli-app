@@ -33,7 +33,7 @@ export function RateForm({ rate }: { rate: number }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between rounded-lg border p-4">
         <div>
-          <p className="text-sm text-muted-foreground">Active rate (Saldo → Zelle)</p>
+          <p className="text-sm text-muted-foreground">Active rate (Saldo buy)</p>
           <p className="text-2xl font-semibold">{formatArs(rate)} / USD</p>
         </div>
         <Button type="button" variant="outline" onClick={onRefresh} disabled={isRefreshing}>

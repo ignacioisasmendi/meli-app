@@ -39,25 +39,26 @@ export async function fetchSaldoRate(from: string, to: string): Promise<SaldoRat
   return rate
 }
 
-export interface ZelleArsRate {
-  /** ARS paid per 1 USD when buying USD (pesos → Zelle). */
+export interface UsdArsRate {
+  /** ARS paid per 1 USD when buying USD. */
   buyUsdArs: number
-  /** ARS received per 1 USD when selling USD (Zelle → pesos). */
+  /** ARS received per 1 USD when selling USD. */
   sellUsdArs: number
   fetchedAt: string
 }
 
 /**
- * Cost of buying USD via Saldo → Zelle, in ARS per USD.
+ * Cost of buying USD on Saldo, in ARS per USD — the rate we actually pay, so
+ * the one every ARS↔USD conversion in the app uses.
  *
- * The `banco/zelle` pair returns `currency: "ARS"`. By Saldo's own URLs,
- * `bid_url` is `/a/banco/zelle` (pesos → Zelle = buying USD) and `ask_url` is
- * `/a/zelle/banco` (selling USD). So `bid` is the buy leg and `ask` is the sell
- * leg. ⚠️ Confirm against a real Saldo purchase before trusting this for cost
- * math — Saldo's field-name docs label them from the opposite perspective.
+ * The `banco/banco_ar_usd` pair returns `currency: "ARS"`. Saldo's own
+ * `bid_url` is `/a/banco/banco_ar_usd` (pesos → USD = buying USD), so `bid` is
+ * the buy leg; `ask_url` runs the other way. Note `bid > ask` here, which is
+ * the opposite of the usual convention — Saldo labels these from the
+ * counterparty's perspective.
  */
-export async function getZelleArsRate(): Promise<ZelleArsRate> {
-  const rate = await fetchSaldoRate('banco', 'zelle')
+export async function getSaldoUsdArsRate(): Promise<UsdArsRate> {
+  const rate = await fetchSaldoRate('banco', 'banco_ar_usd')
   return {
     buyUsdArs: rate.bid,
     sellUsdArs: rate.ask,

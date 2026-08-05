@@ -38,6 +38,73 @@ export function unmappedSaleMessage(params: {
   ].join('\n')
 }
 
+export function saleCancelledMessage(params: {
+  productName: string
+  quantity: number
+  accountNickname: string
+  refundedArs: number
+  reason?: string
+  restocked: boolean
+}): string {
+  return [
+    '🚫 *Sale Cancelled*',
+    '',
+    `*Product:* ${params.productName}`,
+    `*Quantity:* ${params.quantity}`,
+    `*Account:* ${params.accountNickname}`,
+    `*Refunded:* ${formatArs(params.refundedArs)}`,
+    ...(params.reason ? [`*Reason:* ${params.reason}`] : []),
+    '',
+    params.restocked
+      ? '_Never shipped — stock returned to available._'
+      : '_Stock unchanged._',
+  ].join('\n')
+}
+
+export function returnOpenedMessage(params: {
+  productName: string
+  quantity: number
+  accountNickname: string
+  refundedArs: number
+  claimType: string
+  reason?: string
+  goodsComingBack: boolean
+}): string {
+  return [
+    params.goodsComingBack ? '↩️ *Return Opened*' : '💸 *Refund (no return)*',
+    '',
+    `*Product:* ${params.productName}`,
+    `*Quantity:* ${params.quantity}`,
+    `*Account:* ${params.accountNickname}`,
+    `*Refunded:* ${formatArs(params.refundedArs)}`,
+    `*Claim:* ${params.claimType}`,
+    ...(params.reason ? [`*Reason:* ${params.reason}`] : []),
+    '',
+    params.goodsComingBack
+      ? '_Revenue reversed. Confirm receipt in Sales to restock._'
+      : '_Revenue reversed and the unit is gone — booked as a loss._',
+  ].join('\n')
+}
+
+export function returnReceivedMessage(params: {
+  productName: string
+  quantity: number
+  resellable: boolean
+  availableStock: number
+}): string {
+  return [
+    params.resellable ? '📥 *Return Received*' : '🗑️ *Return Written Off*',
+    '',
+    `*Product:* ${params.productName}`,
+    `*Quantity:* ${params.quantity}`,
+    ...(params.resellable ? [`*Available Stock:* ${params.availableStock}`] : []),
+    '',
+    params.resellable
+      ? '_Back on the shelf at its original batch cost._'
+      : '_Not resellable — cost written off._',
+  ].join('\n')
+}
+
 export function lowStockMessage(params: {
   productName: string
   currentStock: number

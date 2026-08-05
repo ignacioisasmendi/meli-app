@@ -39,8 +39,11 @@ missing-config error almost always means a missing env var, not a code bug.
   half) spread the USA→Argentina courier bill across a `Shipment`'s batches on arrival.
   A batch stores `goodsUnitCostUsd + freightUnitCostUsd = unitCostUsd`; only
   `unitCostUsd` feeds FIFO and profit.
+  `returns.ts` unwinds a sale (cancel / open return / receive / refund-no-return); it owns
+  the status + money side and calls `reverseSale` in `stock.ts` for the stock side.
 - **`lib/mercadolibre/`** — `oauth.ts`, `client.ts` (per-account `mlGet` with auto token
-  refresh), `sync.ts` (`processOrder` = idempotent order→sale pipeline; `syncAccountListings`).
+  refresh), `sync.ts` (`processOrder` = idempotent order→sale pipeline, incl. cancellation;
+  `processClaim` = returns/refunds; `syncAccountListings`).
 - **`lib/telegram/`** — `client.ts` (`sendTelegramMessage`, never throws) + `messages.ts`.
 - **`lib/imports/`** — `amazon-order.ts` (types + total reconciliation, dependency-free),
   `amazon-screenshot.ts` (Claude vision extraction, server only), `match-product.ts`.
@@ -53,9 +56,20 @@ missing-config error almost always means a missing env var, not a code bug.
 - A batch is only sellable once it reaches `WAREHOUSE`/`AVAILABLE`, which is exactly when
   `costShipment` puts it there — so freight is known before FIFO can consume it and
   provisional costs never reach a sale.
-- Sales are idempotent on `Sale.mlOrderId`; webhooks dedupe on `WebhookEvent (topic,resource)`.
-- Money: ML revenue is ARS; cost/profit are USD via `getUsdArsRate()` (Setting override or
-  `USD_ARS_RATE`). Use `formatArs` / `formatUsd` from `lib/utils.ts`.
+- Sales are idempotent on `Sale.mlOrderId`; webhooks dedupe on `WebhookEvent.dedupeKey`
+  (`topic|resource|sent`) — NOT on `(topic, resource)`, since ML re-notifies the same
+  resource on every state change and an order's cancellation would be swallowed.
+- A reversed sale keeps its gross figures; `refundedArs` / `reversedProfitUsd` sit beside
+  them so every aggregate can net out with `SUM(gross) - SUM(reversed)` in one query. Use
+  `netRevenueArs` / `netProfitUsd` from `lib/inventory/returns.ts` for per-row reads.
+- Returned goods only re-enter stock at `receiveReturn` (physical receipt), never when the
+  claim opens — otherwise units still in the mail would look sellable.
+- Money: ML revenue is ARS; cost/profit are USD via `getUsdArsRate()` — the Saldo
+  `banco/banco_ar_usd` **bid** (what we pay to buy USD), cached once per Argentina day,
+  falling back to the `usdArsRate` Setting then `USD_ARS_RATE`. Use `formatArs` /
+  `formatUsd` from `lib/utils.ts`.
+- Peso costs that feed a stored USD figure (e.g. a shipment's local delivery) must store
+  the rate used alongside the amount, so re-costing later can't move booked landed costs.
 - shadcn/ui in `components/ui` (Tailwind v4, "new-york"). Match existing component patterns.
 
 ## Adding a feature

@@ -1,6 +1,7 @@
 import 'server-only'
 import { prisma } from '@/lib/prisma'
 import { getInTransit, stockViewFrom } from '@/lib/inventory/stock'
+import { netProfitUsd, netRevenueArs } from '@/lib/inventory/returns'
 import { getUsdArsRate } from '@/lib/settings'
 
 export interface InventoryReportRow {
@@ -39,6 +40,9 @@ export interface SalesReportRow {
   quantity: number
   revenueArs: number
   profitUsd: number
+  status: string
+  returnedQuantity: number
+  refundedArs: number
 }
 
 export async function getSalesReport(range?: {
@@ -57,13 +61,18 @@ export async function getSalesReport(range?: {
     },
     orderBy: { soldAt: 'desc' },
   })
+  // Revenue and profit are reported NET of refunds, with the gross reversal
+  // alongside them so a cancelled order is visible rather than just absent.
   return sales.map((s) => ({
     date: s.soldAt,
     product: s.product.name,
     account: s.account.nickname,
-    quantity: s.quantity,
-    revenueArs: s.salePriceArs,
-    profitUsd: s.profitUsd,
+    quantity: s.quantity - s.returnedQuantity,
+    revenueArs: netRevenueArs(s),
+    profitUsd: netProfitUsd(s),
+    status: s.status,
+    returnedQuantity: s.returnedQuantity,
+    refundedArs: s.refundedArs,
   }))
 }
 
@@ -102,7 +111,16 @@ export async function getProfitabilityReport(): Promise<ProfitabilityReportRow[]
   const rate = await getUsdArsRate()
   const grouped = await prisma.sale.groupBy({
     by: ['productId'],
-    _sum: { salePriceArs: true, feeArs: true, shippingArs: true, profitUsd: true, quantity: true },
+    _sum: {
+      salePriceArs: true,
+      feeArs: true,
+      shippingArs: true,
+      profitUsd: true,
+      quantity: true,
+      refundedArs: true,
+      reversedProfitUsd: true,
+      returnedQuantity: true,
+    },
   })
   const products = await prisma.product.findMany({
     where: { id: { in: grouped.map((g) => g.productId) } },
@@ -112,15 +130,20 @@ export async function getProfitabilityReport(): Promise<ProfitabilityReportRow[]
 
   return grouped
     .map((g) => {
+      // Refunds come off the top line; fees and shipping are not netted because
+      // ML does not reliably give them back on a cancellation.
       const netArs =
-        (g._sum.salePriceArs ?? 0) - (g._sum.feeArs ?? 0) - (g._sum.shippingArs ?? 0)
+        (g._sum.salePriceArs ?? 0) -
+        (g._sum.refundedArs ?? 0) -
+        (g._sum.feeArs ?? 0) -
+        (g._sum.shippingArs ?? 0)
       const revenueUsd = netArs / rate
-      const profitUsd = g._sum.profitUsd ?? 0
+      const profitUsd = (g._sum.profitUsd ?? 0) - (g._sum.reversedProfitUsd ?? 0)
       const costUsd = revenueUsd - profitUsd
       const marginPct = revenueUsd > 0 ? (profitUsd / revenueUsd) * 100 : 0
       return {
         product: nameById.get(g.productId) ?? g.productId,
-        units: g._sum.quantity ?? 0,
+        units: (g._sum.quantity ?? 0) - (g._sum.returnedQuantity ?? 0),
         revenueUsd,
         costUsd,
         profitUsd,

@@ -20,6 +20,8 @@ export async function syncListings(accountId: string): Promise<ActionResult> {
   try {
     const count = await syncAccountListings(account)
     revalidatePath('/accounts')
+    // A sync also backfills product images, so the catalog is stale too.
+    revalidatePath('/products')
     return { ok: true, count } as ActionResult & { count: number }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Sync failed' }

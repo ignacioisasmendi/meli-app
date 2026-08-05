@@ -11,6 +11,8 @@ import {
   type CostingSummary,
 } from '@/lib/inventory/shipment-costing'
 import { IN_TRANSIT_STATUSES, recomputeAverageCost } from '@/lib/inventory/stock'
+import { arsToUsd } from '@/lib/inventory/shipment'
+import { getUsdArsRate } from '@/lib/settings'
 import { sendTelegramMessage } from '@/lib/telegram/client'
 import { shipmentCostedMessage } from '@/lib/telegram/messages'
 import type { ActionResult } from '@/actions/products'
@@ -195,6 +197,8 @@ const costingSchema = z.object({
   freightUsd: z.coerce.number().min(0).default(0),
   customsUsd: z.coerce.number().min(0).default(0),
   otherUsd: z.coerce.number().min(0).default(0),
+  /** Domestic delivery, in pesos — converted server-side at the Saldo rate. */
+  localShippingArs: z.coerce.number().min(0).default(0),
   basis: z.nativeEnum(AllocationBasis).optional(),
 })
 
@@ -207,6 +211,10 @@ export type CostShipmentResult =
  * batches in the box, and moves them to WAREHOUSE at their true landed cost.
  * This is the moment the goods become sellable, which is why the cost is
  * correct before FIFO can ever touch it.
+ *
+ * Local delivery is billed in pesos, so it is converted here — server-side, at
+ * the live Saldo rate — and the rate is stored on the shipment so the result
+ * stays reproducible if the shipment is reopened later.
  */
 export async function costShipment(
   id: string,
@@ -227,10 +235,15 @@ export async function costShipment(
     return { ok: false, error: 'This shipment has no purchases in it yet' }
   }
 
-  const { freightUsd, customsUsd, otherUsd, basis } = parsed.data
-  if (freightUsd + customsUsd + otherUsd <= 0) {
+  const { freightUsd, customsUsd, otherUsd, localShippingArs, basis } = parsed.data
+  if (freightUsd + customsUsd + otherUsd + localShippingArs <= 0) {
     return { ok: false, error: 'Enter at least one cost before closing the shipment' }
   }
+
+  // Rate is read once, here, and frozen on the shipment — not read again inside
+  // the transaction, so the stored USD and the stored rate always agree.
+  const usdArsRate = await getUsdArsRate()
+  const localShippingUsd = arsToUsd(localShippingArs, usdArsRate)
 
   let summary: CostingSummary
   try {
@@ -241,6 +254,9 @@ export async function costShipment(
           freightUsd,
           customsUsd,
           otherUsd,
+          localShippingArs,
+          localShippingUsd,
+          localShippingRate: localShippingArs > 0 ? usdArsRate : null,
           ...(basis ? { basis } : {}),
           arrivedAt: shipment.arrivedAt ?? new Date(),
         },

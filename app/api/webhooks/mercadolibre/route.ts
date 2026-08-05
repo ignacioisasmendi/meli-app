@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { after } from 'next/server'
 import { WebhookStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { processOrder } from '@/lib/mercadolibre/sync'
+import { processOrder, processClaim } from '@/lib/mercadolibre/sync'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +12,10 @@ interface MlNotification {
   topic: string
   application_id?: number
   attempts?: number
+  /// When ML generated this notification. Constant across its delivery retries,
+  /// distinct per state change — so it's the right thing to dedupe on.
+  sent?: string
+  received?: string
 }
 
 /**
@@ -31,13 +35,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'missing_fields' }, { status: 400 })
   }
 
-  // Idempotent event log keyed by (topic, resource).
+  // Idempotent event log keyed by (topic, resource, sent).
+  //
+  // Keying on (topic, resource) alone was wrong: ML re-notifies the SAME resource
+  // on every state change, so once an order's first notification was processed,
+  // its later cancellation notification collided with that row and was silently
+  // dropped as a duplicate. `sent` is stable across ML's retries of one
+  // notification but differs per state change, which is exactly the seam we want.
+  const sentAt = parseTimestamp(body.sent)
+  const dedupeKey = `${topic}|${resource}|${body.sent ?? body.received ?? 'none'}`
   const event = await prisma.webhookEvent.upsert({
-    where: { topic_resource: { topic, resource } },
+    where: { dedupeKey },
     update: { mlUserId: user_id ? String(user_id) : undefined },
     create: {
+      dedupeKey,
       topic,
       resource,
+      sentAt,
       mlUserId: user_id ? String(user_id) : null,
       payload: body as object,
     },
@@ -84,12 +98,30 @@ async function handleNotification(
     case 'orders': {
       const orderId = resource.split('/').pop()!
       const result = await processOrder(account, orderId)
-      return result.status === 'created' || result.reason === 'duplicate'
+      return result.status === 'created' ||
+        result.status === 'cancelled' ||
+        result.reason === 'duplicate'
         ? WebhookStatus.PROCESSED
         : WebhookStatus.SKIPPED
+    }
+    // Post-purchase: returns, refunds and after-the-fact cancellations. A
+    // delivered order that gets returned never changes order status, so this is
+    // the only notification that reveals it.
+    case 'claims':
+    case 'post_purchase': {
+      const claimId = resource.split('/').pop()!
+      const result = await processClaim(account, claimId)
+      return result.status === 'reversed' ? WebhookStatus.PROCESSED : WebhookStatus.SKIPPED
     }
     // items / shipments / questions: logged for now (handled in later iterations).
     default:
       return WebhookStatus.SKIPPED
   }
+}
+
+/** ISO timestamp from an ML payload, or null when absent/unparseable. */
+function parseTimestamp(value?: string): Date | null {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
 }

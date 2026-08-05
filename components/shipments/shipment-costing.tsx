@@ -25,9 +25,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatGrams, formatUsd } from '@/lib/utils'
+import { formatArs, formatGrams, formatUsd } from '@/lib/utils'
 import { ALLOCATION_BASIS_HINTS, ALLOCATION_BASIS_OPTIONS } from '@/lib/statuses'
-import { allocateFreight } from '@/lib/inventory/shipment'
+import { allocateFreight, arsToUsd } from '@/lib/inventory/shipment'
 import { applyEstimate, assignBatches, costShipment, reopenShipment } from '@/actions/shipments'
 
 export interface CostingBatch {
@@ -60,6 +60,9 @@ export function ShipmentCosting({
   freightUsd,
   customsUsd,
   otherUsd,
+  localShippingArs,
+  localShippingRate,
+  usdArsRate,
   batches,
 }: {
   shipmentId: string
@@ -69,6 +72,11 @@ export function ShipmentCosting({
   freightUsd: number | null
   customsUsd: number | null
   otherUsd: number | null
+  localShippingArs: number | null
+  /** Rate frozen when this shipment was costed, if it has been. */
+  localShippingRate: number | null
+  /** Today's Saldo buy rate, for the live preview before costing. */
+  usdArsRate: number
   batches: CostingBatch[]
 }) {
   const router = useRouter()
@@ -78,9 +86,14 @@ export function ShipmentCosting({
   const [freight, setFreight] = useState(freightUsd ? String(freightUsd) : '')
   const [customs, setCustoms] = useState(customsUsd ? String(customsUsd) : '')
   const [other, setOther] = useState(otherUsd ? String(otherUsd) : '')
+  const [localArs, setLocalArs] = useState(localShippingArs ? String(localShippingArs) : '')
   const [basis, setBasis] = useState<AllocationBasis>(initialBasis)
 
-  const bill = num(freight) + num(customs) + num(other)
+  // A costed shipment shows the rate it was actually costed at, not today's.
+  const rate = costed && localShippingRate ? localShippingRate : usdArsRate
+  const localUsd = arsToUsd(num(localArs), rate)
+
+  const bill = num(freight) + num(customs) + num(other) + localUsd
 
   const allocation = useMemo(
     () =>
@@ -105,6 +118,7 @@ export function ShipmentCosting({
         freightUsd: num(freight),
         customsUsd: num(customs),
         otherUsd: num(other),
+        localShippingArs: num(localArs),
         basis,
       })
       if (!res.ok) {
@@ -215,27 +229,51 @@ export function ShipmentCosting({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="costing-basis">Split by</Label>
-            <Select
-              value={basis}
-              onValueChange={(v) => setBasis(v as AllocationBasis)}
+            <Label htmlFor="localArs">Local shipping (ARS)</Label>
+            <Input
+              id="localArs"
+              type="number"
+              step="0.01"
+              min={0}
+              value={localArs}
+              onChange={(e) => setLocalArs(e.target.value)}
+              placeholder="0"
               disabled={costed || pending}
-            >
-              <SelectTrigger id="costing-basis">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ALLOCATION_BASIS_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
+            <p className="text-xs text-muted-foreground">
+              {num(localArs) > 0 ? (
+                <>
+                  = <span className="font-medium text-foreground">{formatUsd(localUsd)}</span> at{' '}
+                  {formatArs(rate)}/USD
+                  {costed && localShippingRate ? ' (rate when costed)' : ''}
+                </>
+              ) : (
+                <>Converted at the Saldo buy rate, {formatArs(rate)}/USD.</>
+              )}
+            </p>
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground">{ALLOCATION_BASIS_HINTS[basis]}</p>
+        <div className="grid gap-2 sm:max-w-xs">
+          <Label htmlFor="costing-basis">Split by</Label>
+          <Select
+            value={basis}
+            onValueChange={(v) => setBasis(v as AllocationBasis)}
+            disabled={costed || pending}
+          >
+            <SelectTrigger id="costing-basis">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ALLOCATION_BASIS_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">{ALLOCATION_BASIS_HINTS[basis]}</p>
+        </div>
 
         {allocation.fallbackReason && (
           <div className="flex gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
@@ -359,6 +397,11 @@ export function ShipmentCosting({
             <div>
               <dt className="text-muted-foreground">Freight bill</dt>
               <dd className="font-medium">{formatUsd(bill)}</dd>
+              {localUsd > 0 && (
+                <dd className="text-xs text-muted-foreground">
+                  incl. {formatUsd(localUsd)} local
+                </dd>
+              )}
             </div>
             <div>
               <dt className="text-muted-foreground">Landed total</dt>

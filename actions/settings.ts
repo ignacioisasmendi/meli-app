@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireUser } from '@/lib/session'
-import { setUsdArsRate, refreshSaldoZelleRate } from '@/lib/settings'
+import { setUsdArsRate, refreshSaldoRate } from '@/lib/settings'
 import type { ActionResult } from '@/actions/products'
 
 const rateSchema = z.object({
@@ -22,11 +22,11 @@ export async function updateUsdArsRate(formData: FormData): Promise<ActionResult
   return { ok: true }
 }
 
-/** Pulls a fresh USD/ARS rate from Saldo (Zelle buy leg) into the daily cache. */
+/** Pulls a fresh USD/ARS rate from Saldo (buy leg) into the daily cache. */
 export async function refreshRate(): Promise<ActionResult> {
   await requireUser()
   try {
-    await refreshSaldoZelleRate()
+    await refreshSaldoRate()
   } catch {
     return { ok: false, error: 'Could not reach Saldo. Using the last known rate.' }
   }

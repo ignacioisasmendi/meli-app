@@ -32,14 +32,30 @@ export async function GET(
     }
     case 'sales': {
       const rows = await getSalesReport()
+      // Quantity/revenue/profit are net of returns; the reversal columns keep the
+      // gross story auditable rather than making refunded orders look like they
+      // were simply smaller.
       const csv = toCsv(
-        ['Date', 'Product', 'Account', 'Quantity', 'Revenue ARS', 'Profit USD'],
+        [
+          'Date',
+          'Product',
+          'Account',
+          'Status',
+          'Quantity',
+          'Returned',
+          'Revenue ARS',
+          'Refunded ARS',
+          'Profit USD',
+        ],
         rows.map((r) => [
           formatDate(r.date),
           r.product,
           r.account,
+          r.status,
           r.quantity,
+          r.returnedQuantity,
           r.revenueArs.toFixed(2),
+          r.refundedArs.toFixed(2),
           r.profitUsd.toFixed(2),
         ])
       )
