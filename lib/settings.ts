@@ -81,3 +81,5 @@ export async function refreshSaldoZelleRate(): Promise<number> {
 export async function setUsdArsRate(rate: number): Promise<void> {
   await writeSetting(USD_ARS_RATE_KEY, String(rate))
 }
+
+
