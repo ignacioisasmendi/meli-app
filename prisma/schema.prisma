@@ -163,11 +163,50 @@ model Product {
   @@map("products")
 }
 
+/// One order placed with a supplier (an Amazon order, typically), grouping the
+/// per-product `Purchase` lines it was split into.
+///
+/// It also keeps the order-level extras the supplier charged once for the whole
+/// basket — tax and shipping — which `allocateLandedCosts` spreads over the
+/// lines by value at import time. Storing them here is what makes the split
+/// explainable afterwards: the order total is the sum you actually paid, and
+/// every line can show how much of it landed on that product.
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  /// The supplier's own order number, as printed on the invoice.
+  orderNumber String
+  supplier    String
+  /// Order-level tax, already allocated across `purchases`.
+  taxUsd      Float    @default(0)
+  /// Order-level shipping & handling (net of any free-shipping discount),
+  /// already allocated across `purchases`. This is the SUPPLIER's shipping —
+  /// the USA → Argentina courier bill lives on `Shipment`.
+  shippingUsd Float    @default(0)
+  purchasedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  purchases Purchase[]
+
+  @@unique([supplier, orderNumber])
+  @@index([purchasedAt])
+  @@map("purchase_orders")
+}
+
 model Purchase {
   id           String         @id @default(cuid())
   productId    String
   product      Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// The supplier order this line came from. Null for one-off purchases
+  /// registered by hand, which are an order of one.
+  orderId      String?
+  order        PurchaseOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
   quantity     Int
+  /// Supplier price for ONE unit, before the order's tax & shipping.
+  unitPriceUsd Float          @default(0)
+  /// `unitPriceUsd` + this line's share of the order's tax & shipping, i.e. the
+  /// cost of one unit landed in the USA. Import freight is added later, on the
+  /// batch, once the shipment is costed.
   unitCostUsd  Float
   totalCostUsd Float
   supplier     String?
@@ -179,6 +218,7 @@ model Purchase {
   batches InventoryBatch[]
 
   @@index([productId])
+  @@index([orderId])
   @@index([status])
   @@map("purchases")
 }

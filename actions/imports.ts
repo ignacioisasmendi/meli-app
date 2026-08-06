@@ -45,6 +45,10 @@ export type ImportPayload = z.infer<typeof importSchema>
  * product is created (when new) and a purchase + batch recorded through the
  * stock pipeline.
  *
+ * Given an order number the lines are also grouped under a `PurchaseOrder`, so
+ * the basket that was actually paid for stays one thing on the purchases page
+ * and its tax/shipping can be shown line by line.
+ *
  * That covers everything knowable at purchase time. The USA → Argentina freight
  * is not — it arrives with the box — so lines can be dropped into a shipment
  * here and re-costed later by `costShipment`.
@@ -78,11 +82,21 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
     { tax, shipping }
   )
 
-  const base = parsed.data.supplier || 'Amazon'
-  const supplier = orderNumber ? `${base} · ${orderNumber}` : base
+  const supplier = parsed.data.supplier || 'Amazon'
 
   try {
     await prisma.$transaction(async (tx) => {
+      // Re-importing an order number adds to it rather than forking a second
+      // group: each import allocated its own extras over its own lines, so the
+      // per-line costs already booked stay untouched and the header just sums.
+      const order = orderNumber
+        ? await tx.purchaseOrder.upsert({
+            where: { supplier_orderNumber: { supplier, orderNumber } },
+            create: { orderNumber, supplier, taxUsd: tax, shippingUsd: shipping, purchasedAt },
+            update: { taxUsd: { increment: tax }, shippingUsd: { increment: shipping } },
+          })
+        : null
+
       for (const [i, line] of lines.entries()) {
         let productId = line.productId
         const unitCostUsd = landed[i]
@@ -104,7 +118,9 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
         const purchase = await tx.purchase.create({
           data: {
             productId: productId!,
+            orderId: order?.id,
             quantity: line.quantity,
+            unitPriceUsd: line.unitPrice,
             unitCostUsd,
             totalCostUsd,
             supplier,

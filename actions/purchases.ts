@@ -44,6 +44,9 @@ export async function registerPurchase(formData: FormData): Promise<ActionResult
       data: {
         productId,
         quantity,
+        // A one-off purchase carries no order-level extras to allocate, so the
+        // price paid is already the landed-in-the-USA cost.
+        unitPriceUsd: unitCostUsd,
         unitCostUsd,
         totalCostUsd,
         supplier: supplier || null,
@@ -102,7 +105,40 @@ export async function updatePurchaseStatus(
   })
 
   revalidatePath('/purchases')
+  if (purchase.orderId) revalidatePath(`/purchases/orders/${purchase.orderId}`)
   revalidatePath('/inventory')
   revalidatePath(`/products/${purchase.productId}`)
+  return { ok: true }
+}
+
+/** Moves every line of an order together — the box travels as one. */
+export async function updateOrderStatus(
+  orderId: string,
+  status: PurchaseStatus
+): Promise<ActionResult> {
+  await requireUser()
+  const lines = await prisma.purchase.findMany({
+    where: { orderId },
+    select: { id: true, productId: true },
+  })
+  if (lines.length === 0) return { ok: false, error: 'Order not found' }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.purchase.updateMany({ where: { orderId }, data: { status } })
+    await tx.inventoryBatch.updateMany({
+      where: { purchaseId: { in: lines.map((l) => l.id) } },
+      data: { status: status as unknown as BatchStatus },
+    })
+    for (const productId of new Set(lines.map((l) => l.productId))) {
+      await recomputeAverageCost(tx, productId)
+    }
+  })
+
+  revalidatePath('/purchases')
+  revalidatePath(`/purchases/orders/${orderId}`)
+  revalidatePath('/inventory')
+  for (const productId of new Set(lines.map((l) => l.productId))) {
+    revalidatePath(`/products/${productId}`)
+  }
   return { ok: true }
 }
