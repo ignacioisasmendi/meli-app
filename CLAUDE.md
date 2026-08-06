@@ -72,9 +72,11 @@ missing-config error almost always means a missing env var, not a code bug.
   `formatUsd` from `lib/utils.ts`.
 - Peso costs that feed a stored USD figure (e.g. a shipment's local delivery) must store
   the rate used alongside the amount, so re-costing later can't move booked landed costs.
-- An import groups its lines under a `PurchaseOrder`, which stores the supplier's tax +
-  shipping. A line's share of them is `totalCostUsd - unitPriceUsd * quantity` — read it,
-  never re-split the header, or re-importing into the same order would move booked costs.
+- An import groups its lines under a `PurchaseOrder`. What the supplier billed for a line
+  is `unitPriceUsd * quantity + taxUsd + shippingUsd`, all stored on the `Purchase` and
+  all immutable. Never infer the tax from `unitCostUsd`/`totalCostUsd`: `costShipment`
+  overwrites those two with the freight-inclusive landed figure, which is what FIFO and
+  profit read. Import freight belongs to the batch, not to the order.
 - shadcn/ui in `components/ui` (Tailwind v4, "new-york"). Match existing component patterns.
 
 ## Adding a feature

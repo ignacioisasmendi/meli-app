@@ -35,7 +35,7 @@ export default async function PurchasesPage() {
     <div>
       <PageHeader
         title="Purchases"
-        description="One row per supplier order. Open one to see what each product cost, tax included."
+        description="One row per supplier order. Open one to see each product’s price and tax side by side."
         action={
           <div className="flex gap-2">
             <Button asChild variant="outline">
@@ -55,10 +55,10 @@ export default async function PurchasesPage() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Order</TableHead>
-              <TableHead className="text-right">Items</TableHead>
               <TableHead className="text-right">Units</TableHead>
-              <TableHead className="text-right">Goods</TableHead>
-              <TableHead className="text-right">Tax &amp; shipping</TableHead>
+              <TableHead className="text-right">Products</TableHead>
+              <TableHead className="text-right">Tax</TableHead>
+              <TableHead className="text-right">Shipping</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Shipment</TableHead>
               <TableHead>Status</TableHead>
@@ -89,11 +89,18 @@ export default async function PurchasesPage() {
                     </Link>
                     <span className="ml-2 text-xs text-muted-foreground">{order.supplier}</span>
                   </TableCell>
-                  <TableCell className="text-right">{s.lineCount}</TableCell>
-                  <TableCell className="text-right">{s.units}</TableCell>
+                  <TableCell className="text-right">
+                    {s.units}
+                    <span className="block text-xs text-muted-foreground">
+                      {s.lineCount} item{s.lineCount === 1 ? '' : 's'}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-right">{formatUsd(s.goodsUsd)}</TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {s.extrasUsd > 0 ? formatUsd(s.extrasUsd) : '—'}
+                  <TableCell className="text-right">
+                    {s.taxUsd > 0 ? formatUsd(s.taxUsd) : '—'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {s.shippingUsd > 0 ? formatUsd(s.shippingUsd) : '—'}
                   </TableCell>
                   <TableCell className="text-right font-medium">{formatUsd(s.totalUsd)}</TableCell>
                   <TableCell>

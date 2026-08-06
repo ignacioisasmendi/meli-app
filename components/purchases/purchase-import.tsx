@@ -20,7 +20,7 @@ import { PasteOrderImport } from '@/components/purchases/paste-order-import'
 import { ScannedOrderReview } from '@/components/purchases/scanned-order-review'
 import { ScreenshotDropzone } from '@/components/purchases/screenshot-dropzone'
 import { formatUsd } from '@/lib/utils'
-import { allocateLandedCosts } from '@/lib/inventory/landed'
+import { allocateOrder } from '@/lib/inventory/landed'
 import { matchProduct, suggestSku } from '@/lib/imports/match-product'
 import type { ParsedOrder } from '@/lib/imports/amazon-order'
 import { importPurchases, type ImportPayload } from '@/actions/imports'
@@ -140,12 +140,13 @@ export function PurchaseImport({
     )
   }
 
-  // Live preview of per-unit landed cost (tax + shipping allocated by value).
-  const landed = allocateLandedCosts(
+  // Live preview of the same breakdown that gets recorded on each purchase:
+  // goods, then this line's share of the order's tax and shipping.
+  const allocated = allocateOrder(
     lines.map((l) => ({ quantity: num(l.quantity), unitPrice: num(l.unitPrice) })),
     { tax: num(tax), shipping: num(shipping) }
   )
-  const grandTotal = lines.reduce((sum, l, i) => sum + num(l.quantity) * landed[i], 0)
+  const grandTotal = allocated.reduce((sum, a) => sum + a.totalUsd, 0)
 
   function onImport() {
     const payload: ImportPayload = {
@@ -299,7 +300,25 @@ export function PurchaseImport({
                   Item {i + 1}
                   {num(line.unitPrice) > 0 && (
                     <span className="ml-2 text-foreground">
-                      → {formatUsd(landed[i])}/unit landed
+                      {formatUsd(allocated[i].goodsUsd)}
+                      {allocated[i].taxUsd > 0 && (
+                        <span className="text-muted-foreground">
+                          {' '}
+                          + {formatUsd(allocated[i].taxUsd)} tax
+                        </span>
+                      )}
+                      {allocated[i].shippingUsd > 0 && (
+                        <span className="text-muted-foreground">
+                          {' '}
+                          + {formatUsd(allocated[i].shippingUsd)} shipping
+                        </span>
+                      )}
+                      {' = '}
+                      {formatUsd(allocated[i].totalUsd)}
+                      <span className="text-muted-foreground">
+                        {' '}
+                        ({formatUsd(allocated[i].unitCostUsd)}/unit)
+                      </span>
                     </span>
                   )}
                 </span>
@@ -397,7 +416,7 @@ export function PurchaseImport({
 
           <div className="flex items-center justify-between border-t pt-4">
             <span className="text-sm text-muted-foreground">
-              Total landed cost:{' '}
+              Order total (goods + tax + shipping):{' '}
               <span className="font-medium text-foreground">{formatUsd(grandTotal)}</span>
             </span>
             <Button onClick={onImport} disabled={pending}>

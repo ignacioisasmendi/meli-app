@@ -15,9 +15,23 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatDate, formatUsd } from '@/lib/utils'
-import { getPurchaseOrder, lineExtrasUsd, lineFreight, summarizeOrder } from '@/lib/purchases'
+import { getPurchaseOrder, lineCosts, summarizeOrder } from '@/lib/purchases'
 
 export const dynamic = 'force-dynamic'
+
+/** One term of the running sum across the top of the page. */
+function Term({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-xl font-semibold ${muted ? 'text-muted-foreground' : ''}`}>{value}</p>
+    </div>
+  )
+}
+
+function Operator({ children }: { children: React.ReactNode }) {
+  return <span className="pb-0.5 self-end text-lg text-muted-foreground">{children}</span>
+}
 
 export default async function PurchaseOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -28,28 +42,11 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   // Freight columns only earn their space once a shipment has been costed.
   const hasFreight = summary.freightUsd > 0
 
-  const stats = [
-    { label: 'Items', value: String(summary.lineCount) },
-    { label: 'Units', value: String(summary.units) },
-    { label: 'Goods', value: formatUsd(summary.goodsUsd) },
-    { label: 'Tax & shipping', value: formatUsd(summary.extrasUsd) },
-    { label: 'Order total', value: formatUsd(summary.totalUsd) },
-    ...(hasFreight
-      ? [
-          {
-            label: summary.freightIsEstimate ? 'Freight (est.)' : 'Freight',
-            value: formatUsd(summary.freightUsd),
-          },
-          { label: 'Landed', value: formatUsd(summary.landedUsd) },
-        ]
-      : []),
-  ]
-
   return (
     <div>
       <PageHeader
         title={order.orderNumber}
-        description={`${order.supplier} · ${formatDate(order.purchasedAt)} · tax and shipping split across the items by value`}
+        description={`${order.supplier} · ${formatDate(order.purchasedAt)} · ${summary.lineCount} product${summary.lineCount === 1 ? '' : 's'}, ${summary.units} unit${summary.units === 1 ? '' : 's'}`}
         action={
           <div className="flex gap-2">
             <Button asChild variant="outline">
@@ -67,16 +64,29 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
         }
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        {stats.map((s) => (
-          <Card key={s.label}>
-            <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground">{s.label}</p>
-              <p className="mt-1 text-2xl font-semibold">{s.value}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Card className="mb-6">
+        <CardContent className="flex flex-wrap items-start gap-x-6 gap-y-4">
+          <Term label="Products" value={formatUsd(summary.goodsUsd)} />
+          <Operator>+</Operator>
+          <Term label="Tax" value={formatUsd(summary.taxUsd)} />
+          <Operator>+</Operator>
+          <Term label="Shipping" value={formatUsd(summary.shippingUsd)} />
+          <Operator>=</Operator>
+          <Term label="Order total" value={formatUsd(summary.totalUsd)} />
+          {hasFreight && (
+            <>
+              <Operator>+</Operator>
+              <Term
+                label={summary.freightIsEstimate ? 'Import freight (est.)' : 'Import freight'}
+                value={formatUsd(summary.freightUsd)}
+                muted
+              />
+              <Operator>=</Operator>
+              <Term label="Landed" value={formatUsd(summary.landedUsd)} />
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="overflow-hidden p-0">
         <Table>
@@ -84,20 +94,19 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             <TableRow>
               <TableHead>Product</TableHead>
               <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Unit price</TableHead>
-              <TableHead className="text-right">Tax &amp; shipping</TableHead>
-              <TableHead className="text-right">Unit cost</TableHead>
-              <TableHead className="text-right">Line total</TableHead>
-              {hasFreight && <TableHead className="text-right">Freight</TableHead>}
-              {hasFreight && <TableHead className="text-right">Landed / unit</TableHead>}
+              <TableHead className="text-right">Product price</TableHead>
+              <TableHead className="text-right">Tax</TableHead>
+              <TableHead className="text-right">Shipping</TableHead>
+              <TableHead className="text-right">Total</TableHead>
+              {hasFreight && <TableHead className="text-right">Import freight</TableHead>}
+              {hasFreight && <TableHead className="text-right">Landed</TableHead>}
               <TableHead>Shipment</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {order.purchases.map((line) => {
-              const extras = lineExtrasUsd(line)
-              const freight = lineFreight(line)
+              const c = lineCosts(line)
               const shipment = line.batches.find((b) => b.shipment)?.shipment
               return (
                 <TableRow key={line.id}>
@@ -113,29 +122,37 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                     </span>
                   </TableCell>
                   <TableCell className="text-right">{line.quantity}</TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {formatUsd(line.unitPriceUsd)}
-                    <span className="ml-1 text-xs">× {line.quantity}</span>
+                  <TableCell className="text-right">
+                    {formatUsd(c.goodsUsd)}
+                    <span className="block text-xs text-muted-foreground">
+                      {formatUsd(line.unitPriceUsd)} ea
+                    </span>
                   </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {extras > 0 ? `+ ${formatUsd(extras)}` : '—'}
+                  <TableCell className="text-right">
+                    {c.taxUsd > 0 ? formatUsd(c.taxUsd) : '—'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {c.shippingUsd > 0 ? formatUsd(c.shippingUsd) : '—'}
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatUsd(line.unitCostUsd)}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatUsd(line.totalCostUsd)}
+                    {formatUsd(c.totalUsd)}
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      {formatUsd(c.unitCostUsd)} ea
+                    </span>
                   </TableCell>
                   {hasFreight && (
                     <TableCell className="text-right text-muted-foreground">
-                      {freight.totalUsd > 0
-                        ? `${freight.isEstimate ? '~' : ''}${formatUsd(freight.totalUsd)}`
+                      {c.freightUsd > 0
+                        ? `${c.freightIsEstimate ? '~' : ''}${formatUsd(c.freightUsd)}`
                         : '—'}
                     </TableCell>
                   )}
                   {hasFreight && (
-                    <TableCell className="text-right">
-                      {formatUsd(line.unitCostUsd + freight.perUnitUsd)}
+                    <TableCell className="text-right font-medium">
+                      {formatUsd(c.landedUsd)}
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        {formatUsd(c.landedUnitUsd)} ea
+                      </span>
                     </TableCell>
                   )}
                   <TableCell>
@@ -159,18 +176,18 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableCell className="font-medium">Order total</TableCell>
               <TableCell className="text-right font-medium">{summary.units}</TableCell>
-              <TableCell className="text-right text-muted-foreground">
+              <TableCell className="text-right font-medium">
                 {formatUsd(summary.goodsUsd)}
               </TableCell>
-              <TableCell className="text-right text-muted-foreground">
-                {summary.extrasUsd > 0 ? `+ ${formatUsd(summary.extrasUsd)}` : '—'}
+              <TableCell className="text-right font-medium">{formatUsd(summary.taxUsd)}</TableCell>
+              <TableCell className="text-right font-medium">
+                {formatUsd(summary.shippingUsd)}
               </TableCell>
-              <TableCell />
               <TableCell className="text-right font-semibold">
                 {formatUsd(summary.totalUsd)}
               </TableCell>
               {hasFreight && (
-                <TableCell className="text-right text-muted-foreground">
+                <TableCell className="text-right font-medium text-muted-foreground">
                   {formatUsd(summary.freightUsd)}
                 </TableCell>
               )}
@@ -179,6 +196,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                   {formatUsd(summary.landedUsd)}
                 </TableCell>
               )}
+              {/* Shipment + Status */}
               <TableCell colSpan={2} />
             </TableRow>
           </TableBody>
@@ -186,11 +204,9 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
       </Card>
 
       <p className="mt-4 text-sm text-muted-foreground">
-        <span className="font-medium text-foreground">Unit cost</span> is what one unit cost with
-        this order&rsquo;s extras folded in
-        {summary.extrasUsd > 0
-          ? ` — ${formatUsd(order.taxUsd)} tax and ${formatUsd(order.shippingUsd)} shipping, each item taking a share proportional to its value.`
-          : ', but no tax or shipping was recorded for this order, so it is just the price paid.'}
+        {summary.taxUsd + summary.shippingUsd > 0
+          ? `The order’s ${formatUsd(order.taxUsd)} tax and ${formatUsd(order.shippingUsd)} shipping are split across the products by value, so each one carries its own share.`
+          : 'No tax or shipping was recorded for this order, so each product’s total is just the price paid.'}
         {hasFreight
           ? ' Landed adds the USA → Argentina courier bill from the shipment.'
           : ' The USA → Argentina freight is added later, when the shipment is costed.'}

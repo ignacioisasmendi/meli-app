@@ -204,9 +204,18 @@ model Purchase {
   quantity     Int
   /// Supplier price for ONE unit, before the order's tax & shipping.
   unitPriceUsd Float          @default(0)
-  /// `unitPriceUsd` + this line's share of the order's tax & shipping, i.e. the
-  /// cost of one unit landed in the USA. Import freight is added later, on the
-  /// batch, once the shipment is costed.
+  /// This line's share of the order's tax, for the whole line (not per unit).
+  /// Stored rather than derived: `unitCostUsd` below is overwritten with the
+  /// freight-inclusive figure when the shipment is costed, so the only way the
+  /// price/tax split survives is to keep it on the record.
+  taxUsd       Float          @default(0)
+  /// This line's share of the order's shipping, for the whole line. The
+  /// SUPPLIER's shipping — USA → Argentina freight lives on the batch.
+  shippingUsd  Float          @default(0)
+  /// Cost of one unit for FIFO and profit: price + tax + shipping at import
+  /// time, then rewritten by `costShipment` with import freight folded in.
+  /// `unitPriceUsd + taxUsd + shippingUsd` is what the supplier billed, and
+  /// stays put; this one moves.
   unitCostUsd  Float
   totalCostUsd Float
   supplier     String?

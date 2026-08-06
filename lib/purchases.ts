@@ -1,41 +1,18 @@
 /**
  * Read side of purchases, grouped the way they were actually paid: one supplier
- * order holding the per-product lines it was split into.
+ * order holding the per-product lines it was split into, and every line split
+ * again into the price of the goods, the tax, and the shipping that add up to it.
  *
- * The money is stored, never re-derived — a line's share of the order's tax and
- * shipping is whatever `allocateLandedCosts` booked into `totalCostUsd` at
- * import time, so re-importing into the same order (or editing the header
- * later) can't silently move a cost that is already on a batch.
+ * Those three are read straight off the record, never re-derived from
+ * `unitCostUsd`/`totalCostUsd` — `costShipment` rewrites those two with import
+ * freight folded in, so the gap between them and the goods price stops being
+ * "tax" the moment a shipment lands.
  */
 
 import { Prisma, PurchaseStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
-
-export interface PurchaseLineMoney {
-  quantity: number
-  unitPriceUsd: number
-  totalCostUsd: number
-}
-
-/** What the goods on this line cost, before the order's tax & shipping. */
-export function lineGoodsUsd(line: PurchaseLineMoney): number {
-  return round2(line.unitPriceUsd * line.quantity)
-}
-
-/** This line's share of the order's tax & shipping, exactly as booked. */
-export function lineExtrasUsd(line: PurchaseLineMoney): number {
-  return round2(line.totalCostUsd - line.unitPriceUsd * line.quantity)
-}
-
-export interface LineFreight {
-  /** USA → Argentina freight already folded into this line's units. */
-  totalUsd: number
-  perUnitUsd: number
-  /** True while that freight is a shipment estimate, not the courier's bill. */
-  isEstimate: boolean
-}
 
 export const purchaseOrderWithLines = {
   purchases: {
@@ -62,35 +39,64 @@ export type PurchaseOrderWithLines = Prisma.PurchaseOrderGetPayload<{
 
 export type PurchaseOrderLine = PurchaseOrderWithLines['purchases'][number]
 
+export interface LineCosts {
+  /** Goods at the supplier's list price, before anything is added. */
+  goodsUsd: number
+  taxUsd: number
+  shippingUsd: number
+  /** goods + tax + shipping — what the supplier billed for this line. */
+  totalUsd: number
+  /** One unit with tax & shipping in it. */
+  unitCostUsd: number
+  /** USA → Argentina freight folded in by shipment costing, 0 until then. */
+  freightUsd: number
+  freightPerUnitUsd: number
+  /** True while that freight is a shipment estimate, not the courier's bill. */
+  freightIsEstimate: boolean
+  /** totalUsd + freightUsd — the goods standing in Argentina. */
+  landedUsd: number
+  landedUnitUsd: number
+}
+
 /**
- * Import freight carried by a line's batches. Normally one batch, but a line
- * split across boxes is averaged so the row still reads per unit.
+ * What one line cost, broken into its parts. Freight comes off the line's
+ * batches — normally one, but a line split across boxes is summed so the row
+ * still reads per line.
  */
-export function lineFreight(line: PurchaseOrderLine): LineFreight {
-  const units = line.batches.reduce((n, b) => n + b.quantity, 0)
-  const totalUsd = line.batches.reduce((n, b) => n + b.freightUnitCostUsd * b.quantity, 0)
+export function lineCosts(line: PurchaseOrderLine): LineCosts {
+  const goodsUsd = round2(line.unitPriceUsd * line.quantity)
+  const totalUsd = round2(goodsUsd + line.taxUsd + line.shippingUsd)
+  const freightUsd = round2(
+    line.batches.reduce((sum, b) => sum + b.freightUnitCostUsd * b.quantity, 0)
+  )
+  const units = Math.max(1, line.quantity)
+
   return {
-    totalUsd: round2(totalUsd),
-    perUnitUsd: units > 0 ? round2(totalUsd / units) : 0,
-    isEstimate: line.batches.some((b) => b.freightUnitCostUsd > 0 && b.freightIsEstimate),
+    goodsUsd,
+    taxUsd: line.taxUsd,
+    shippingUsd: line.shippingUsd,
+    totalUsd,
+    unitCostUsd: round2(totalUsd / units),
+    freightUsd,
+    freightPerUnitUsd: round2(freightUsd / units),
+    freightIsEstimate: line.batches.some((b) => b.freightUnitCostUsd > 0 && b.freightIsEstimate),
+    landedUsd: round2(totalUsd + freightUsd),
+    landedUnitUsd: round2((totalUsd + freightUsd) / units),
   }
 }
 
 export interface OrderSummary {
   lineCount: number
   units: number
-  /** Goods only, at the supplier's list price. */
   goodsUsd: number
-  /** Tax + shipping the supplier charged, spread across the lines. */
-  extrasUsd: number
-  /** goods + extras — what the order was actually billed at. */
+  taxUsd: number
+  shippingUsd: number
+  /** goods + tax + shipping — the supplier's invoice total. */
   totalUsd: number
-  /** USA → Argentina freight folded in so far by shipment costing. */
   freightUsd: number
-  /** totalUsd + freightUsd — cost of the goods sitting in Argentina. */
-  landedUsd: number
-  /** True while any freight above is still a shipment estimate. */
   freightIsEstimate: boolean
+  /** totalUsd + freightUsd. */
+  landedUsd: number
   /** A single status when every line agrees, else null ("Mixed"). */
   status: PurchaseStatus | null
   shipments: { id: string; code: string }[]
@@ -99,21 +105,19 @@ export interface OrderSummary {
 /** Rolls a set of order lines up into the figures both purchase views show. */
 export function summarizeOrder(lines: PurchaseOrderLine[]): OrderSummary {
   const shipments = new Map<string, { id: string; code: string }>()
-  let units = 0
-  let goodsUsd = 0
-  let extrasUsd = 0
-  let totalUsd = 0
-  let freightUsd = 0
+  const totals = { units: 0, goodsUsd: 0, taxUsd: 0, shippingUsd: 0, totalUsd: 0, freightUsd: 0 }
   let freightIsEstimate = false
 
   for (const line of lines) {
-    units += line.quantity
-    goodsUsd += lineGoodsUsd(line)
-    extrasUsd += lineExtrasUsd(line)
-    totalUsd += line.totalCostUsd
+    const costs = lineCosts(line)
+    totals.units += line.quantity
+    totals.goodsUsd += costs.goodsUsd
+    totals.taxUsd += costs.taxUsd
+    totals.shippingUsd += costs.shippingUsd
+    totals.totalUsd += costs.totalUsd
+    totals.freightUsd += costs.freightUsd
+    if (costs.freightIsEstimate) freightIsEstimate = true
     for (const batch of line.batches) {
-      freightUsd += batch.freightUnitCostUsd * batch.quantity
-      if (batch.freightUnitCostUsd > 0 && batch.freightIsEstimate) freightIsEstimate = true
       if (batch.shipment) shipments.set(batch.shipment.id, batch.shipment)
     }
   }
@@ -122,13 +126,14 @@ export function summarizeOrder(lines: PurchaseOrderLine[]): OrderSummary {
 
   return {
     lineCount: lines.length,
-    units,
-    goodsUsd: round2(goodsUsd),
-    extrasUsd: round2(extrasUsd),
-    totalUsd: round2(totalUsd),
-    freightUsd: round2(freightUsd),
-    landedUsd: round2(totalUsd + freightUsd),
+    units: totals.units,
+    goodsUsd: round2(totals.goodsUsd),
+    taxUsd: round2(totals.taxUsd),
+    shippingUsd: round2(totals.shippingUsd),
+    totalUsd: round2(totals.totalUsd),
+    freightUsd: round2(totals.freightUsd),
     freightIsEstimate,
+    landedUsd: round2(totals.totalUsd + totals.freightUsd),
     status: statuses.size === 1 ? [...statuses][0] : null,
     shipments: [...shipments.values()],
   }

@@ -6,7 +6,7 @@ import { BatchStatus, PurchaseStatus, ShipmentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/session'
 import { applyPurchase, recomputeAverageCost } from '@/lib/inventory/stock'
-import { allocateLandedCosts } from '@/lib/inventory/landed'
+import { allocateOrder } from '@/lib/inventory/landed'
 import { SHIPMENT_TO_BATCH_STATUS } from '@/lib/inventory/shipment-costing'
 import { sendTelegramMessage } from '@/lib/telegram/client'
 import type { ActionResult } from '@/actions/products'
@@ -76,8 +76,8 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
     batchStatus = SHIPMENT_TO_BATCH_STATUS[shipment.status]
   }
 
-  // Authoritative landed cost — recomputed server-side, never trusted from the client.
-  const landed = allocateLandedCosts(
+  // Authoritative cost breakdown — recomputed server-side, never trusted from the client.
+  const allocated = allocateOrder(
     lines.map((l) => ({ quantity: l.quantity, unitPrice: l.unitPrice })),
     { tax, shipping }
   )
@@ -99,7 +99,7 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
 
       for (const [i, line] of lines.entries()) {
         let productId = line.productId
-        const unitCostUsd = landed[i]
+        const { taxUsd, shippingUsd, totalUsd, unitCostUsd } = allocated[i]
 
         if (line.mode === 'new') {
           const sku = line.sku!.trim()
@@ -114,15 +114,19 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
           if (!product) throw new Error('A selected product no longer exists')
         }
 
-        const totalCostUsd = line.quantity * unitCostUsd
         const purchase = await tx.purchase.create({
           data: {
             productId: productId!,
             orderId: order?.id,
             quantity: line.quantity,
             unitPriceUsd: line.unitPrice,
+            taxUsd,
+            shippingUsd,
             unitCostUsd,
-            totalCostUsd,
+            // The line was billed goods + tax + shipping; spreading that over
+            // the units and multiplying back can drift a cent, so the billed
+            // figure is what gets stored.
+            totalCostUsd: totalUsd,
             supplier,
             status: batchStatus as unknown as PurchaseStatus,
             purchasedAt,
