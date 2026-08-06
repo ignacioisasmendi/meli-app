@@ -1,5 +1,10 @@
 import { prisma } from '@/lib/prisma'
-import { getSaldoUsdArsRate } from '@/lib/saldo/client'
+
+// Imported lazily inside the functions below rather than at module scope: the
+// Saldo client is `server-only`, and keeping it off the top level lets scripts
+// (`tsx`) read the cached rate without the import throwing. Under Next.js the
+// dynamic import resolves normally.
+const saldoClient = () => import('@/lib/saldo/client')
 
 const USD_ARS_RATE_KEY = 'usdArsRate' // manual fallback override
 // Keys are pair-specific on purpose: switching pairs must not resurrect a
@@ -49,6 +54,7 @@ export async function getUsdArsRate(): Promise<number> {
   if (cached && cachedDate?.value === today) return cached
 
   try {
+    const { getSaldoUsdArsRate } = await saldoClient()
     const { buyUsdArs } = await getSaldoUsdArsRate()
     if (Number.isFinite(buyUsdArs) && buyUsdArs > 0) {
       await Promise.all([
@@ -71,6 +77,7 @@ export async function getUsdArsRate(): Promise<number> {
 
 /** Forces a fresh fetch from Saldo and updates the daily cache. */
 export async function refreshSaldoRate(): Promise<number> {
+  const { getSaldoUsdArsRate } = await saldoClient()
   const { buyUsdArs } = await getSaldoUsdArsRate()
   await Promise.all([
     writeSetting(SALDO_RATE_KEY, String(buyUsdArs)),

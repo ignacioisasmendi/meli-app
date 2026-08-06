@@ -158,6 +158,7 @@ model Product {
   sales     Sale[]
   movements InventoryMovement[]
   listings  MlListing[]
+  candidates OpportunityCandidate[]
 
   @@index([archived])
   @@map("products")
@@ -481,4 +482,96 @@ model Setting {
   value String
 
   @@map("settings")
+}
+
+// ---------------------------------------------------------------------------
+// Sourcing — candidate products to import
+// ---------------------------------------------------------------------------
+
+/// What became of a candidate after it was evaluated.
+enum OpportunityStatus {
+  /// Cleared the margin filter and is waiting to be looked at.
+  NEW
+  /// Worth importing — kept out of the noise on later scans.
+  SHORTLISTED
+  /// Not worth it. `rejectedReason` says why, so a re-scan doesn't
+  /// re-litigate the same product every week.
+  REJECTED
+  /// Turned into a real purchase; `productId` points at the catalog entry.
+  IMPORTED
+}
+
+/// A product being considered for import, with the numbers it was judged on.
+///
+/// The whole cost breakdown is snapshotted rather than recomputed on read, for
+/// the same reason a shipment freezes `localShippingRate`: the FX rate, the
+/// freight rate and ML's fee all move, and a candidate has to stay explainable
+/// as of the day it was scored. `PriceObservation` carries the moving picture.
+model OpportunityCandidate {
+  id    String @id @default(cuid())
+  asin  String?
+  title String
+  brand String
+  model String?
+  /// Normalized `brand + model`, the dedupe key. Two listings that differ only
+  /// in wording, colour or capacity collapse onto the same value.
+  modelKey String
+
+  // ── Source side (Amazon) ──
+  amazonPriceUsd Float
+  amazonTaxUsd   Float @default(0)
+  weightGrams    Float
+
+  // ── Sale side (Mercado Libre) ──
+  mlPriceArs    Float
+  mlSoldQty     Int?
+  mlPermalink   String?
+  mlCategoryId  String?
+
+  // ── The snapshot the verdict was based on ──
+  usdArsRate        Float
+  freightUsdPerKg   Float
+  freightUsd        Float
+  landedUsd         Float
+  mlFeeRate         Float
+  mlFeeArs          Float
+  mlShippingCostArs Float @default(0)
+  netProfitUsd      Float
+  roiPct            Float
+  breakEvenMlArs    Float
+
+  status         OpportunityStatus @default(NEW)
+  rejectedReason String?
+  /// Set when this candidate is already something we stock.
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  scannedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  observations PriceObservation[]
+
+  @@unique([modelKey])
+  @@index([status])
+  @@index([roiPct])
+  @@index([scannedAt])
+  @@map("opportunity_candidates")
+}
+
+/// One reading of a candidate's prices, kept so a scan can tell a durable margin
+/// from a one-day Amazon promo — the question a spreadsheet row can never answer.
+model PriceObservation {
+  id          String               @id @default(cuid())
+  candidateId String
+  candidate   OpportunityCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  amazonPriceUsd Float
+  mlPriceArs     Float
+  netProfitUsd   Float
+  roiPct         Float
+  observedAt     DateTime @default(now())
+
+  @@index([candidateId, observedAt])
+  @@map("price_observations")
 }

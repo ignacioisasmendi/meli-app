@@ -1,0 +1,25 @@
+[
+  {
+    "asin": "B09XS7JWHH",
+    "title": "Sony WH-1000XM5 Wireless Noise Cancelling Headphones",
+    "brand": "Sony",
+    "model": "WH-1000XM5",
+    "amazonPriceUsd": 298.0,
+    "amazonTaxUsd": 0,
+    "weightGrams": 250,
+    "mlPriceArs": 511294,
+    "mlSoldQty": 1000,
+    "mlPermalink": "https://articulo.mercadolibre.com.ar/MLA-EXAMPLE",
+    "mlCategoryId": "MLA1051"
+  },
+  {
+    "asin": "B0C1J2K3L4",
+    "title": "Example heavy product that should fail on shipping",
+    "brand": "ExampleBrand",
+    "model": "HEAVY-1",
+    "amazonPriceUsd": 120.0,
+    "weightGrams": 8000,
+    "mlPriceArs": 340000,
+    "mlCategoryId": "MLA1000"
+  }
+]
