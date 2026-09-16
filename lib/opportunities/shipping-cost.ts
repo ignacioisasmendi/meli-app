@@ -43,15 +43,32 @@ export interface ShippingBracket {
 
 export interface ShippingTable {
   brackets: ShippingBracket[]
+  /**
+   * Median shipping across ALL sampled orders, weight known or not.
+   *
+   * Bracketing needs `Product.weightGrams`, which is sparsely filled — without
+   * this the table would be empty and every candidate would be scored at zero
+   * shipping, i.e. optimistically. A single blended figure is wrong in the
+   * details but right in magnitude, which is the difference that decides whether
+   * a product is worth importing.
+   */
+  overallMedianArs: number
+  overallSamples: number
   measuredAt: string
-  /** Sales inspected to build the table. */
+  /** Orders whose shipping charge could be read. */
   sampled: number
 }
 
 export interface ShippingCost {
   ars: number
-  basis: 'MEASURED' | 'EXTRAPOLATED' | 'UNKNOWN'
-  /** Samples behind the bracket that produced this figure. */
+  /**
+   * MEASURED   — from the weight bracket this product falls in.
+   * EXTRAPOLATED — from a neighbouring bracket.
+   * BLENDED    — the all-orders median, because no bracket has data yet.
+   * UNKNOWN    — nothing measured; the caller is scoring without shipping.
+   */
+  basis: 'MEASURED' | 'EXTRAPOLATED' | 'BLENDED' | 'UNKNOWN'
+  /** Samples behind the figure returned. */
   samples: number
 }
 
@@ -101,6 +118,14 @@ export function lookupShippingCost(
     }
   }
 
+  if (table.overallSamples > 0) {
+    return {
+      ars: Math.round(table.overallMedianArs),
+      basis: 'BLENDED',
+      samples: table.overallSamples,
+    }
+  }
+
   return { ars: 0, basis: 'UNKNOWN', samples: 0 }
 }
 
@@ -122,26 +147,42 @@ export async function readShippingTable(prisma: PrismaClient): Promise<ShippingT
  */
 export async function measureShippingTable(
   prisma: PrismaClient,
-  accessToken: string,
+  /**
+   * Token for a given account. Per-account, not global: an order can only be
+   * read with the token of the account that sold it, and this app is
+   * multi-account — using one token for everything silently 401s on every sale
+   * belonging to any other account.
+   */
+  tokenFor: (accountId: string) => Promise<string | null>,
   sampleSize = 60
 ): Promise<ShippingTable> {
+  // Deliberately NOT filtered on weight: an order with no weight on file still
+  // tells us what shipping costs on average, and that is the difference between
+  // a usable blended figure and scoring everything at zero.
   const sales = await prisma.sale.findMany({
-    where: { product: { weightGrams: { gt: 0 } } },
     orderBy: { soldAt: 'desc' },
     take: sampleSize,
     select: {
       mlOrderId: true,
+      accountId: true,
       quantity: true,
       product: { select: { weightGrams: true } },
     },
   })
 
   const observations = new Map<number, number[]>()
+  const allCosts: number[] = []
   let sampled = 0
 
   for (const sale of sales) {
-    const senderCost = await fetchSenderCost(accessToken, sale.mlOrderId)
+    const token = await tokenFor(sale.accountId)
+    if (!token) continue
+
+    const senderCost = await fetchSenderCost(token, sale.mlOrderId)
     if (senderCost == null) continue
+
+    sampled++
+    allCosts.push(senderCost)
 
     // Weight of what actually travelled in that parcel.
     const grams = (sale.product.weightGrams ?? 0) * Math.max(1, sale.quantity)
@@ -151,7 +192,6 @@ export async function measureShippingTable(
     const bucket = observations.get(index) ?? []
     bucket.push(senderCost)
     observations.set(index, bucket)
-    sampled++
   }
 
   const brackets: ShippingBracket[] = [...WEIGHT_BRACKETS_GRAMS, null].map((maxGrams, i) => {
@@ -165,6 +205,8 @@ export async function measureShippingTable(
 
   const table: ShippingTable = {
     brackets,
+    overallMedianArs: Math.round(median(allCosts)),
+    overallSamples: allCosts.length,
     measuredAt: new Date().toISOString(),
     sampled,
   }

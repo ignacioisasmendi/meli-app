@@ -49,19 +49,86 @@ type InputRow = CandidateInput & {
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 const prisma = new PrismaClient({ adapter })
 
-async function activeAccessToken(): Promise<string> {
-  const account = await prisma.mercadoLibreAccount.findFirst({
-    where: { isActive: true },
-    orderBy: { createdAt: 'asc' },
-  })
-  if (!account) throw new Error('No active MercadoLibreAccount — connect one first')
-  if (account.expiresAt.getTime() <= Date.now()) {
-    throw new Error(
-      `Access token for ${account.nickname} expired at ${account.expiresAt.toISOString()} — ` +
-        'run the refresh-tokens cron, then retry'
-    )
+const REFRESH_SKEW_MS = 10 * 60 * 1000
+
+/**
+ * Per-account access tokens, refreshed on demand.
+ *
+ * Mirrors `getValidAccessToken` rather than calling it: that lives behind
+ * `server-only`. Refusing to refresh would make the script unusable most of the
+ * time — ML tokens last six hours and this is meant to run daily.
+ *
+ * Keyed by account because the app is multi-account and an order can only be
+ * read with the token of the account that sold it.
+ */
+function createTokenProvider() {
+  const cache = new Map<string, string>()
+
+  async function forAccount(accountId: string): Promise<string | null> {
+    const cached = cache.get(accountId)
+    if (cached) return cached
+
+    const account = await prisma.mercadoLibreAccount.findUnique({ where: { id: accountId } })
+    if (!account || !account.isActive) return null
+
+    if (account.expiresAt.getTime() - Date.now() >= REFRESH_SKEW_MS) {
+      cache.set(accountId, account.accessToken)
+      return account.accessToken
+    }
+
+    const res = await fetch('https://api.mercadolibre.com/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: process.env.ML_CLIENT_ID ?? '',
+        client_secret: process.env.ML_CLIENT_SECRET ?? '',
+        refresh_token: account.refreshToken,
+      }),
+    })
+    if (!res.ok) {
+      console.warn(
+        `  ! could not refresh the token for ${account.nickname} (${res.status}) — skipping it`
+      )
+      return null
+    }
+
+    const token = (await res.json()) as {
+      access_token: string
+      refresh_token: string
+      expires_in: number
+    }
+    await prisma.mercadoLibreAccount.update({
+      where: { id: account.id },
+      data: {
+        accessToken: token.access_token,
+        refreshToken: token.refresh_token,
+        expiresAt: new Date(Date.now() + token.expires_in * 1000),
+      },
+    })
+    console.log(`Refreshed the access token for ${account.nickname}.`)
+    cache.set(accountId, token.access_token)
+    return token.access_token
   }
-  return account.accessToken
+
+  /** Any valid token — `listing_prices` is site-level, not account-specific. */
+  async function any(): Promise<string> {
+    const accounts = await prisma.mercadoLibreAccount.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    })
+    for (const a of accounts) {
+      const token = await forAccount(a.id)
+      if (token) return token
+    }
+    throw new Error('No active MercadoLibreAccount has a usable token')
+  }
+
+  return { forAccount, any }
 }
 
 /**
@@ -101,17 +168,28 @@ async function main() {
   const rateOverride = rateArg ? Number(rateArg.split('=')[1]) : null
   const file = args.find((a) => !a.startsWith('--'))
 
-  const token = await activeAccessToken()
+  const tokens = createTokenProvider()
+  const token = await tokens.any()
 
   if (measure) {
     console.log('Measuring what we pay to ship, from recent orders...\n')
-    const table = await measureShippingTable(prisma, token)
-    console.log(`sampled ${table.sampled} shipments\n`)
+    const table = await measureShippingTable(prisma, tokens.forAccount)
+    console.log(`read the shipping charge on ${table.sampled} order(s)\n`)
     for (const b of table.brackets) {
       const label = b.maxGrams ? `≤ ${b.maxGrams} g` : '> 25000 g'
       console.log(
         `  ${label.padEnd(12)} ${b.samples > 0 ? formatArs(b.arsPerShipment) : '—'}` +
           `  (${b.samples} sample${b.samples === 1 ? '' : 's'})`
+      )
+    }
+    console.log(
+      `\n  blended      ${table.overallSamples > 0 ? formatArs(table.overallMedianArs) : '—'}` +
+        `  (${table.overallSamples} order${table.overallSamples === 1 ? '' : 's'}, any weight)`
+    )
+    if (table.overallSamples > 0 && table.brackets.every((b) => b.samples === 0)) {
+      console.log(
+        '\n  No bracket has data because no sold product has a weight on file.\n' +
+          '  Scans will use the blended figure until `Product.weightGrams` is filled in.'
       )
     }
     console.log('\nStored in Setting `mlSellerShippingBrackets`.')
