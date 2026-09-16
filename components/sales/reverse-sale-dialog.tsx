@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -33,6 +34,8 @@ export function ReverseSaleDialog({
   productName: string
   quantity: number
 }) {
+  const t = useTranslations('ReverseSale')
+  const tCommon = useTranslations('Common')
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
@@ -44,9 +47,7 @@ export function ReverseSaleDialog({
           ? await cancelSaleManually(formData)
           : await openReturnManually(formData)
       if (result.ok) {
-        toast.success(
-          kind === 'cancel' ? 'Sale cancelled and restocked' : 'Return opened'
-        )
+        toast.success(kind === 'cancel' ? t('saleCancelled') : t('returnOpened'))
         setOpen(false)
       } else {
         toast.error(result.error)
@@ -57,21 +58,21 @@ export function ReverseSaleDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Reverse sale">
+        <Button variant="ghost" size="icon" aria-label={t('reverseSale')}>
           <Undo2 className="size-4" />
         </Button>
       </DialogTrigger>
       <DialogContent>
         <form>
           <DialogHeader>
-            <DialogTitle>Reverse sale</DialogTitle>
+            <DialogTitle>{t('reverseSale')}</DialogTitle>
             <DialogDescription>
-              {productName} — {quantity} unit{quantity === 1 ? '' : 's'}
+              {t('productQuantity', { productName, count: quantity })}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="quantity">Units (returns only)</Label>
+              <Label htmlFor="quantity">{t('unitsReturnsOnly')}</Label>
               <Input
                 id="quantity"
                 name="quantity"
@@ -82,13 +83,11 @@ export function ReverseSaleDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="reason">Reason</Label>
-              <Input id="reason" name="reason" placeholder="Why (optional)" />
+              <Label htmlFor="reason">{t('reason')}</Label>
+              <Input id="reason" name="reason" placeholder={t('whyPlaceholder')} />
             </div>
             <p className="text-xs text-muted-foreground">
-              <strong>Cancel</strong> is for an order that never shipped — stock
-              goes back immediately. <strong>Open return</strong> reverses the money
-              now and waits for you to confirm the goods arrived.
+              {t.rich('explainer', { strong: (chunks) => <strong>{chunks}</strong> })}
             </p>
           </div>
           <DialogFooter className="gap-2">
@@ -98,7 +97,7 @@ export function ReverseSaleDialog({
               disabled={isPending}
               formAction={(formData) => submit(formData, 'return')}
             >
-              Open return
+              {t('openReturn')}
             </Button>
             <Button
               type="submit"
@@ -106,7 +105,7 @@ export function ReverseSaleDialog({
               disabled={isPending}
               formAction={(formData) => submit(formData, 'cancel')}
             >
-              {isPending ? 'Saving…' : 'Cancel sale'}
+              {isPending ? tCommon('saving') : t('cancelSale')}
             </Button>
           </DialogFooter>
         </form>

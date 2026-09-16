@@ -2,10 +2,12 @@
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useTransition } from 'react'
+import { useTranslations } from 'next-intl'
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
-export function SearchInput({ placeholder = 'Search…' }: { placeholder?: string }) {
+export function SearchInput({ placeholder }: { placeholder?: string }) {
+  const t = useTranslations('Common')
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -24,7 +26,7 @@ export function SearchInput({ placeholder = 'Search…' }: { placeholder?: strin
       <Input
         defaultValue={searchParams.get('q') ?? ''}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t('search')}
         className="pl-9"
       />
     </div>

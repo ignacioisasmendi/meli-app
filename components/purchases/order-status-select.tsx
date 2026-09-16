@@ -2,6 +2,7 @@
 
 import { useTransition } from 'react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { PurchaseStatus } from '@prisma/client'
 import {
   Select,
@@ -10,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { PURCHASE_STATUS_OPTIONS } from '@/lib/statuses'
+import { PURCHASE_STATUS_VALUES } from '@/lib/statuses'
 import { updateOrderStatus } from '@/actions/purchases'
 
 /**
@@ -26,13 +27,15 @@ export function OrderStatusSelect({
   status: PurchaseStatus | null
   lineCount: number
 }) {
+  const t = useTranslations('Status')
+  const tOrder = useTranslations('OrderStatusSelect')
   const [isPending, startTransition] = useTransition()
 
   function onChange(value: string) {
     startTransition(async () => {
       const result = await updateOrderStatus(orderId, value as PurchaseStatus)
       if (result.ok) {
-        toast.success(`${lineCount} line${lineCount === 1 ? '' : 's'} updated`)
+        toast.success(tOrder('linesUpdated', { count: lineCount }))
       } else {
         toast.error(result.error)
       }
@@ -42,12 +45,12 @@ export function OrderStatusSelect({
   return (
     <Select value={status ?? undefined} onValueChange={onChange} disabled={isPending}>
       <SelectTrigger className="h-8 w-36">
-        <SelectValue placeholder="Mixed" />
+        <SelectValue placeholder={tOrder('mixed')} />
       </SelectTrigger>
       <SelectContent>
-        {PURCHASE_STATUS_OPTIONS.map((s) => (
-          <SelectItem key={s.value} value={s.value}>
-            {s.label}
+        {PURCHASE_STATUS_VALUES.map((value) => (
+          <SelectItem key={value} value={value}>
+            {t(value)}
           </SelectItem>
         ))}
       </SelectContent>

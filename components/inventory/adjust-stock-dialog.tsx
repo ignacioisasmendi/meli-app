@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,6 +25,8 @@ export function AdjustStockDialog({
   productId: string
   productName: string
 }) {
+  const t = useTranslations('AdjustStock')
+  const tCommon = useTranslations('Common')
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
@@ -32,7 +35,7 @@ export function AdjustStockDialog({
     startTransition(async () => {
       const result = await adjustStock(formData)
       if (result.ok) {
-        toast.success('Stock adjusted')
+        toast.success(t('stockAdjusted'))
         setOpen(false)
       } else {
         toast.error(result.error)
@@ -43,38 +46,36 @@ export function AdjustStockDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Adjust stock">
+        <Button variant="ghost" size="icon" aria-label={t('adjustStock')}>
           <SlidersHorizontal className="size-4" />
         </Button>
       </DialogTrigger>
       <DialogContent>
         <form action={onSubmit}>
           <DialogHeader>
-            <DialogTitle>Adjust stock</DialogTitle>
+            <DialogTitle>{t('adjustStock')}</DialogTitle>
             <DialogDescription>{productName}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="delta">Adjustment (±)</Label>
+              <Label htmlFor="delta">{t('adjustment')}</Label>
               <Input
                 id="delta"
                 name="delta"
                 type="number"
-                placeholder="e.g. -2 or 5"
+                placeholder={t('adjustmentPlaceholder')}
                 required
               />
-              <p className="text-xs text-muted-foreground">
-                Positive adds units, negative removes them.
-              </p>
+              <p className="text-xs text-muted-foreground">{t('adjustmentHint')}</p>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="note">Note</Label>
-              <Input id="note" name="note" placeholder="Reason (optional)" />
+              <Label htmlFor="note">{t('note')}</Label>
+              <Input id="note" name="note" placeholder={t('notePlaceholder')} />
             </div>
           </div>
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
-              {isPending ? 'Saving…' : 'Apply'}
+              {isPending ? tCommon('saving') : t('apply')}
             </Button>
           </DialogFooter>
         </form>

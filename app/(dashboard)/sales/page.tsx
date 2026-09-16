@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server'
 import { SaleStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
@@ -13,12 +14,17 @@ import {
 } from '@/components/ui/table'
 import { ReceiveReturnDialog } from '@/components/sales/receive-return-dialog'
 import { ReverseSaleDialog } from '@/components/sales/reverse-sale-dialog'
-import { getPendingReturns, netProfitUsd, netRevenueArs } from '@/lib/inventory/returns'
+import {
+  getPendingReturns,
+  netProfitUsd,
+  netRevenueArs,
+} from '@/lib/inventory/returns'
 import { formatArs, formatDateTime, formatUsd } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SalesPage() {
+  const t = await getTranslations('Sales')
   const [sales, pendingReturns] = await Promise.all([
     prisma.sale.findMany({
       include: {
@@ -33,28 +39,22 @@ export default async function SalesPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Sales"
-        description="Orders imported automatically from Mercado Libre."
-      />
+      <PageHeader title={t('title')} description={t('description')} />
 
       {pendingReturns.length > 0 && (
         <Card className="mb-6 overflow-hidden p-0">
           <div className="border-b px-6 py-4">
-            <h2 className="font-semibold">Returns awaiting receipt</h2>
-            <p className="text-sm text-muted-foreground">
-              Revenue is already reversed. Stock comes back only once you confirm the
-              goods arrived.
-            </p>
+            <h2 className="font-semibold">{t('returnsAwaitingReceipt')}</h2>
+            <p className="text-sm text-muted-foreground">{t('returnsExplainer')}</p>
           </div>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Account</TableHead>
-                <TableHead>Reason</TableHead>
-                <TableHead className="text-right">Units</TableHead>
-                <TableHead className="text-right">Refunded</TableHead>
+                <TableHead>{t('product')}</TableHead>
+                <TableHead>{t('account')}</TableHead>
+                <TableHead>{t('reason')}</TableHead>
+                <TableHead className="text-right">{t('units')}</TableHead>
+                <TableHead className="text-right">{t('refunded')}</TableHead>
                 <TableHead className="w-px" />
               </TableRow>
             </TableHeader>
@@ -91,21 +91,23 @@ export default async function SalesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Product</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Revenue</TableHead>
-              <TableHead className="text-right">Profit (USD)</TableHead>
+              <TableHead>{t('date')}</TableHead>
+              <TableHead>{t('saleNumber')}</TableHead>
+              <TableHead>{t('product')}</TableHead>
+              <TableHead>{t('account')}</TableHead>
+              <TableHead>{t('status')}</TableHead>
+              <TableHead className="text-right">{t('qty')}</TableHead>
+              <TableHead className="text-right">{t('revenue')}</TableHead>
+              <TableHead className="text-right">{t('received')}</TableHead>
+              <TableHead className="text-right">{t('profitUsd')}</TableHead>
               <TableHead className="w-px" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {sales.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                  No sales yet.
+                <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
+                  {t('noSalesYet')}
                 </TableCell>
               </TableRow>
             )}
@@ -118,6 +120,7 @@ export default async function SalesPage() {
                   <TableCell className="text-muted-foreground">
                     {formatDateTime(s.soldAt)}
                   </TableCell>
+                  <TableCell className="font-mono text-xs">{s.saleNumber}</TableCell>
                   <TableCell className="font-medium">
                     {s.product.name}
                     <span className="ml-2 font-mono text-xs text-muted-foreground">
@@ -131,9 +134,10 @@ export default async function SalesPage() {
                   <TableCell className="text-right">
                     {netQuantity}
                     {/* Show what was struck off, not just the survivor. */}
-                    {reversed && <span className="ml-1 text-xs">of {s.quantity}</span>}
+                    {reversed && <span className="ml-1 text-xs">{t('ofTotal', { total: s.quantity })}</span>}
                   </TableCell>
                   <TableCell className="text-right">{formatArs(netRevenueArs(s))}</TableCell>
+                  <TableCell className="text-right">{formatArs(s.netReceivedArs)}</TableCell>
                   <TableCell className="text-right">
                     <span
                       className={

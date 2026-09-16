@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import { Pencil } from 'lucide-react'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
@@ -27,6 +28,7 @@ export default async function ProductsPage({
 }: {
   searchParams: Promise<{ q?: string }>
 }) {
+  const t = await getTranslations('Products')
   const { q } = await searchParams
   const where: Prisma.ProductWhereInput = {
     archived: false,
@@ -49,13 +51,13 @@ export default async function ProductsPage({
   return (
     <div>
       <PageHeader
-        title="Products"
-        description="Your product catalog and live stock."
+        title={t('title')}
+        description={t('description')}
         action={<ProductFormDialog />}
       />
 
       <div className="mb-4">
-        <SearchInput placeholder="Search by name, SKU or brand…" />
+        <SearchInput placeholder={t('searchPlaceholder')} />
       </div>
 
       <Card className="overflow-hidden p-0">
@@ -63,17 +65,17 @@ export default async function ProductsPage({
           <TableHeader>
             <TableRow>
               <TableHead className="w-14">
-                <span className="sr-only">Image</span>
+                <span className="sr-only">{t('image')}</span>
               </TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Brand</TableHead>
-              <TableHead className="text-right">Available</TableHead>
-              <TableHead className="text-right">In transit</TableHead>
-              <TableHead className="text-right">Reserved</TableHead>
-              <TableHead className="text-right">Avg cost</TableHead>
+              <TableHead>{t('sku')}</TableHead>
+              <TableHead>{t('name')}</TableHead>
+              <TableHead>{t('brand')}</TableHead>
+              <TableHead className="text-right">{t('available')}</TableHead>
+              <TableHead className="text-right">{t('inTransit')}</TableHead>
+              <TableHead className="text-right">{t('reserved')}</TableHead>
+              <TableHead className="text-right">{t('avgCost')}</TableHead>
               <TableHead className="w-12">
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{t('actions')}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -81,7 +83,7 @@ export default async function ProductsPage({
             {products.length === 0 && (
               <TableRow>
                 <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
-                  No products yet.
+                  {t('noProductsYet')}
                 </TableCell>
               </TableRow>
             )}
@@ -106,7 +108,7 @@ export default async function ProductsPage({
                     </span>
                     {low && (
                       <Badge variant="destructive" className="ml-2">
-                        Low
+                        {t('low')}
                       </Badge>
                     )}
                   </TableCell>
@@ -130,7 +132,7 @@ export default async function ProductsPage({
                       trigger={
                         <Button variant="ghost" size="icon-sm">
                           <Pencil className="size-4" />
-                          <span className="sr-only">Edit {p.name}</span>
+                          <span className="sr-only">{t('editProduct', { name: p.name })}</span>
                         </Button>
                       }
                     />

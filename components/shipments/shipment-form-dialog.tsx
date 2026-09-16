@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { AllocationBasis } from '@prisma/client'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { ALLOCATION_BASIS_HINTS, ALLOCATION_BASIS_OPTIONS } from '@/lib/statuses'
+import { ALLOCATION_BASIS_VALUES } from '@/lib/statuses'
 import { createShipment, updateShipment } from '@/actions/shipments'
 
 interface ShipmentFormDialogProps {
@@ -40,6 +41,9 @@ interface ShipmentFormDialogProps {
 }
 
 export function ShipmentFormDialog({ shipment, trigger }: ShipmentFormDialogProps) {
+  const t = useTranslations('ShipmentForm')
+  const tBasis = useTranslations('AllocationBasis')
+  const tCommon = useTranslations('Common')
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [basis, setBasis] = useState<AllocationBasis>(shipment?.basis ?? AllocationBasis.WEIGHT)
@@ -52,13 +56,13 @@ export function ShipmentFormDialog({ shipment, trigger }: ShipmentFormDialogProp
           ? await updateShipment(shipment!.id, formData)
           : await createShipment(formData)
         if (result.ok) {
-          toast.success(editing ? 'Shipment updated' : 'Shipment created')
+          toast.success(editing ? t('shipmentUpdated') : t('shipmentCreated'))
           setOpen(false)
         } else {
           toast.error(result.error)
         }
       } catch {
-        toast.error('Something went wrong. Please try again.')
+        toast.error(tCommon('somethingWentWrong'))
       }
     })
   }
@@ -69,24 +73,21 @@ export function ShipmentFormDialog({ shipment, trigger }: ShipmentFormDialogProp
         {trigger ?? (
           <Button>
             <Plus className="size-4" />
-            New shipment
+            {t('newShipment')}
           </Button>
         )}
       </DialogTrigger>
       <DialogContent>
         <form action={onSubmit}>
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit shipment' : 'New shipment'}</DialogTitle>
-            <DialogDescription>
-              A shipment is one physical box travelling to Argentina. Its freight bill gets
-              split across whatever is inside once it lands.
-            </DialogDescription>
+            <DialogTitle>{editing ? t('editShipment') : t('newShipment')}</DialogTitle>
+            <DialogDescription>{t('shipmentExplainer')}</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="code">Code</Label>
+                <Label htmlFor="code">{t('code')}</Label>
                 <Input
                   id="code"
                   name="code"
@@ -96,7 +97,7 @@ export function ShipmentFormDialog({ shipment, trigger }: ShipmentFormDialogProp
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="courier">Courier</Label>
+                <Label htmlFor="courier">{t('courier')}</Label>
                 <Input
                   id="courier"
                   name="courier"
@@ -107,25 +108,25 @@ export function ShipmentFormDialog({ shipment, trigger }: ShipmentFormDialogProp
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="basis">Split freight</Label>
+              <Label htmlFor="basis">{t('splitFreight')}</Label>
               <input type="hidden" name="basis" value={basis} />
               <Select value={basis} onValueChange={(v) => setBasis(v as AllocationBasis)}>
                 <SelectTrigger id="basis">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ALLOCATION_BASIS_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
+                  {ALLOCATION_BASIS_VALUES.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {tBasis(value)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">{ALLOCATION_BASIS_HINTS[basis]}</p>
+              <p className="text-xs text-muted-foreground">{tBasis(`${basis}_hint`)}</p>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="estimatedUsd">Estimated freight (USD)</Label>
+              <Label htmlFor="estimatedUsd">{t('estimatedFreightUsd')}</Label>
               <Input
                 id="estimatedUsd"
                 name="estimatedUsd"
@@ -135,19 +136,16 @@ export function ShipmentFormDialog({ shipment, trigger }: ShipmentFormDialogProp
                 defaultValue={shipment?.estimatedUsd || ''}
                 placeholder="0.00"
               />
-              <p className="text-xs text-muted-foreground">
-                Optional. Lets you price listings while the box is still in transit — the
-                actual bill replaces it on arrival.
-              </p>
+              <p className="text-xs text-muted-foreground">{t('estimatedFreightHint')}</p>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="notes">Notes</Label>
+              <Label htmlFor="notes">{t('notes')}</Label>
               <Textarea
                 id="notes"
                 name="notes"
                 defaultValue={shipment?.notes ?? ''}
-                placeholder="Tracking number, consolidator, anything worth remembering."
+                placeholder={t('notesPlaceholder')}
                 rows={2}
               />
             </div>
@@ -155,7 +153,7 @@ export function ShipmentFormDialog({ shipment, trigger }: ShipmentFormDialogProp
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
-              {isPending ? 'Saving…' : editing ? 'Save changes' : 'Create shipment'}
+              {isPending ? tCommon('saving') : editing ? tCommon('saveChanges') : t('createShipment')}
             </Button>
           </DialogFooter>
         </form>

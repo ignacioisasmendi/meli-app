@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { ListingLinkSelect } from '@/components/accounts/listing-link-select'
@@ -19,6 +20,7 @@ export default async function ListingsPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  const t = await getTranslations('AccountListings')
   const { id } = await params
   const account = await prisma.mercadoLibreAccount.findUnique({ where: { id } })
   if (!account) notFound()
@@ -38,24 +40,24 @@ export default async function ListingsPage({
   return (
     <div>
       <PageHeader
-        title={`Listings — ${account.nickname}`}
-        description="Map Mercado Libre listings to internal products so sales decrement the right stock."
+        title={t('listingsTitle', { nickname: account.nickname })}
+        description={t('description')}
       />
 
       <Card className="overflow-hidden p-0">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Item</TableHead>
-              <TableHead>ML SKU</TableHead>
-              <TableHead>Linked product</TableHead>
+              <TableHead>{t('item')}</TableHead>
+              <TableHead>{t('mlSku')}</TableHead>
+              <TableHead>{t('linkedProduct')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {listings.length === 0 && (
               <TableRow>
                 <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
-                  No listings imported. Use “Sync listings” on the account.
+                  {t('noListingsImported')}
                 </TableCell>
               </TableRow>
             )}

@@ -6,16 +6,28 @@ export function newSaleMessage(params: {
   productName: string
   quantity: number
   accountNickname: string
+  saleNumber: string
   priceArs: number
+  feeArs: number
+  shippingArs: number
+  taxArs: number
+  receivedArs: number
+  profitUsd: number
   remainingStock: number
 }): string {
   return [
     '🛒 *New Sale*',
     '',
+    `*Sale #:* ${params.saleNumber}`,
     `*Product:* ${params.productName}`,
     `*Quantity:* ${params.quantity}`,
     `*Account:* ${params.accountNickname}`,
     `*Price:* ${formatArs(params.priceArs)}`,
+    `*Fee:* −${formatArs(params.feeArs)}`,
+    `*Shipping:* −${formatArs(params.shippingArs)}`,
+    `*Taxes:* −${formatArs(params.taxArs)}`,
+    `*Received:* ${formatArs(params.receivedArs)}`,
+    `*Profit:* ${formatUsd(params.profitUsd)}`,
     `*Remaining Stock:* ${params.remainingStock}`,
   ].join('\n')
 }
@@ -149,6 +161,20 @@ export function shipmentCostedMessage(params: {
     `*Spread over:* ${params.batchCount} batch${params.batchCount === 1 ? '' : 'es'} · ${params.productCount} product${params.productCount === 1 ? '' : 's'}`,
     '',
     '_Landed costs updated — stock is now available._',
+  ].join('\n')
+}
+
+export function fullShipmentReceivedMessage(params: {
+  mlInboundId: string
+  accountNickname: string
+  shipmentCount: number
+}): string {
+  return [
+    '🏬 *Full Shipment Received*',
+    '',
+    `*Inbound ID:* ${params.mlInboundId}`,
+    `*Account:* ${params.accountNickname}`,
+    `*Shipments inside:* ${params.shipmentCount}`,
   ].join('\n')
 }
 

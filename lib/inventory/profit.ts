@@ -1,9 +1,8 @@
 import { getUsdArsRate } from '@/lib/settings'
 
 export interface ProfitInput {
-  salePriceArs: number
-  feeArs: number
-  shippingArs: number
+  /** What ML actually pays out: gross minus fee, shipping and taxes. */
+  netReceivedArs: number
   /** Cost of goods sold, in USD (from FIFO batch consumption). */
   costUsd: number
 }
@@ -16,12 +15,11 @@ export interface ProfitResult {
 }
 
 /**
- * profitUsd = toUsd(salePriceArs − feeArs − shippingArs) − costUsd
+ * profitUsd = toUsd(netReceivedArs) − costUsd
  * The ARS→USD conversion uses the current rate (Setting override or env).
  */
 export function computeProfit(input: ProfitInput, usdArsRate: number): ProfitResult {
-  const netArs = input.salePriceArs - input.feeArs - input.shippingArs
-  const revenueUsd = netArs / usdArsRate
+  const revenueUsd = input.netReceivedArs / usdArsRate
   const profitUsd = revenueUsd - input.costUsd
   const marginPct = revenueUsd > 0 ? (profitUsd / revenueUsd) * 100 : 0
   return { profitUsd, revenueUsd, costUsd: input.costUsd, marginPct }

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import { ChevronRight, Import } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
@@ -21,6 +22,7 @@ import { listPurchaseOrders, listUngroupedPurchases, summarizeOrder } from '@/li
 export const dynamic = 'force-dynamic'
 
 export default async function PurchasesPage() {
+  const t = await getTranslations('Purchases')
   const [orders, loose, products] = await Promise.all([
     listPurchaseOrders(),
     listUngroupedPurchases(),
@@ -34,14 +36,14 @@ export default async function PurchasesPage() {
   return (
     <div>
       <PageHeader
-        title="Purchases"
-        description="One row per supplier order. Open one to see each product’s price and tax side by side."
+        title={t('title')}
+        description={t('description')}
         action={
           <div className="flex gap-2">
             <Button asChild variant="outline">
               <Link href="/purchases/import">
                 <Import className="size-4" />
-                Import order
+                {t('importOrder')}
               </Link>
             </Button>
             <PurchaseFormDialog products={products} />
@@ -53,15 +55,15 @@ export default async function PurchasesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Order</TableHead>
-              <TableHead className="text-right">Units</TableHead>
-              <TableHead className="text-right">Products</TableHead>
-              <TableHead className="text-right">Tax</TableHead>
-              <TableHead className="text-right">Shipping</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead>Shipment</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>{t('date')}</TableHead>
+              <TableHead>{t('order')}</TableHead>
+              <TableHead className="text-right">{t('units')}</TableHead>
+              <TableHead className="text-right">{t('products')}</TableHead>
+              <TableHead className="text-right">{t('tax')}</TableHead>
+              <TableHead className="text-right">{t('shipping')}</TableHead>
+              <TableHead className="text-right">{t('total')}</TableHead>
+              <TableHead>{t('shipment')}</TableHead>
+              <TableHead>{t('status')}</TableHead>
               <TableHead className="w-8" />
             </TableRow>
           </TableHeader>
@@ -69,7 +71,7 @@ export default async function PurchasesPage() {
             {orders.length === 0 && (
               <TableRow>
                 <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
-                  No orders yet. Import an Amazon order to get started.
+                  {t('noOrdersYet')}
                 </TableCell>
               </TableRow>
             )}
@@ -92,7 +94,7 @@ export default async function PurchasesPage() {
                   <TableCell className="text-right">
                     {s.units}
                     <span className="block text-xs text-muted-foreground">
-                      {s.lineCount} item{s.lineCount === 1 ? '' : 's'}
+                      {t('itemCount', { count: s.lineCount })}
                     </span>
                   </TableCell>
                   <TableCell className="text-right">{formatUsd(s.goodsUsd)}</TableCell>
@@ -115,7 +117,7 @@ export default async function PurchasesPage() {
                       </Link>
                     ) : (
                       <span className="text-sm text-muted-foreground">
-                        {s.shipments.length} shipments
+                        {t('shipmentsCount', { count: s.shipments.length })}
                       </span>
                     )}
                   </TableCell>
@@ -130,7 +132,7 @@ export default async function PurchasesPage() {
                     <Link
                       href={`/purchases/orders/${order.id}`}
                       className="text-muted-foreground hover:text-foreground"
-                      aria-label={`Open order ${order.orderNumber}`}
+                      aria-label={t('openOrder', { orderNumber: order.orderNumber })}
                     >
                       <ChevronRight className="size-4" />
                     </Link>
@@ -145,19 +147,19 @@ export default async function PurchasesPage() {
       {loose.length > 0 && (
         <Card className="mt-6 overflow-hidden p-0">
           <CardHeader className="pt-6">
-            <CardTitle className="text-base">Purchases without an order</CardTitle>
+            <CardTitle className="text-base">{t('purchasesWithoutOrder')}</CardTitle>
           </CardHeader>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Unit cost</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>Shipment</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t('date')}</TableHead>
+                <TableHead>{t('product')}</TableHead>
+                <TableHead className="text-right">{t('qty')}</TableHead>
+                <TableHead className="text-right">{t('unitCost')}</TableHead>
+                <TableHead className="text-right">{t('total')}</TableHead>
+                <TableHead>{t('supplier')}</TableHead>
+                <TableHead>{t('shipment')}</TableHead>
+                <TableHead>{t('status')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

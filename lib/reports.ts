@@ -112,9 +112,7 @@ export async function getProfitabilityReport(): Promise<ProfitabilityReportRow[]
   const grouped = await prisma.sale.groupBy({
     by: ['productId'],
     _sum: {
-      salePriceArs: true,
-      feeArs: true,
-      shippingArs: true,
+      netReceivedArs: true,
       profitUsd: true,
       quantity: true,
       refundedArs: true,
@@ -130,13 +128,9 @@ export async function getProfitabilityReport(): Promise<ProfitabilityReportRow[]
 
   return grouped
     .map((g) => {
-      // Refunds come off the top line; fees and shipping are not netted because
-      // ML does not reliably give them back on a cancellation.
-      const netArs =
-        (g._sum.salePriceArs ?? 0) -
-        (g._sum.refundedArs ?? 0) -
-        (g._sum.feeArs ?? 0) -
-        (g._sum.shippingArs ?? 0)
+      // Refunds come off the payout; fees, shipping and taxes are not added back
+      // because ML does not reliably return them on a cancellation.
+      const netArs = (g._sum.netReceivedArs ?? 0) - (g._sum.refundedArs ?? 0)
       const revenueUsd = netArs / rate
       const profitUsd = (g._sum.profitUsd ?? 0) - (g._sum.reversedProfitUsd ?? 0)
       const costUsd = revenueUsd - profitUsd

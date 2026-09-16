@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ImageUp, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
-import { MAX_SCREENSHOTS, type ParsedOrder } from '@/lib/imports/amazon-order'
+import { MAX_SCREENSHOTS, type OrderWarning, type ParsedOrder } from '@/lib/imports/amazon-order'
 
 /** Claude's per-image ceiling is 5 MB; leave room for base64 overhead. */
 const TARGET_BYTES = 4 * 1024 * 1024
@@ -12,7 +13,7 @@ const TARGET_BYTES = 4 * 1024 * 1024
 const MAX_EDGE = 2576
 
 interface Props {
-  onParsed: (order: ParsedOrder, warnings: string[]) => void
+  onParsed: (order: ParsedOrder, warnings: OrderWarning[]) => void
   disabled?: boolean
 }
 
@@ -22,6 +23,7 @@ interface Props {
  * rejected by the upload limit.
  */
 export function ScreenshotDropzone({ onParsed, disabled }: Props) {
+  const t = useTranslations('ScreenshotDropzone')
   const inputRef = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -31,7 +33,7 @@ export function ScreenshotDropzone({ onParsed, disabled }: Props) {
       const images = files.filter((f) => f.type.startsWith('image/'))
       if (images.length === 0) return
       if (images.length > MAX_SCREENSHOTS) {
-        toast.error(`Attach at most ${MAX_SCREENSHOTS} screenshots at a time`)
+        toast.error(t('tooManyScreenshots', { max: MAX_SCREENSHOTS }))
         return
       }
 
@@ -43,18 +45,18 @@ export function ScreenshotDropzone({ onParsed, disabled }: Props) {
         const res = await fetch('/api/imports/parse-screenshot', { method: 'POST', body })
         const json = await res.json()
         if (!res.ok) {
-          toast.error(json.error ?? 'Could not read that screenshot')
+          toast.error(json.error ?? t('couldNotRead'))
           return
         }
 
-        onParsed(json.order as ParsedOrder, (json.warnings as string[]) ?? [])
+        onParsed(json.order as ParsedOrder, (json.warnings as OrderWarning[]) ?? [])
       } catch {
-        toast.error('Could not read that screenshot')
+        toast.error(t('couldNotRead'))
       } finally {
         setPending(false)
       }
     },
-    [onParsed]
+    [onParsed, t]
   )
 
   // Screenshots usually arrive on the clipboard, so accept a plain paste
@@ -117,19 +119,14 @@ export function ScreenshotDropzone({ onParsed, disabled }: Props) {
       {pending ? (
         <>
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
-          <p className="text-sm font-medium">Reading the order…</p>
-          <p className="text-xs text-muted-foreground">This takes a few seconds.</p>
+          <p className="text-sm font-medium">{t('readingOrder')}</p>
+          <p className="text-xs text-muted-foreground">{t('takesAFewSeconds')}</p>
         </>
       ) : (
         <>
           <ImageUp className="size-6 text-muted-foreground" />
-          <p className="text-sm font-medium">
-            Paste, drop, or click to add an Amazon order screenshot
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Order number, date, items, quantities, tax and shipping are filled in below for you to
-            review. Add several screenshots at once for a long order.
-          </p>
+          <p className="text-sm font-medium">{t('dropHint')}</p>
+          <p className="text-xs text-muted-foreground">{t('dropDescription')}</p>
         </>
       )}
     </div>

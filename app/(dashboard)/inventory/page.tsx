@@ -1,3 +1,5 @@
+import { useTranslations } from 'next-intl'
+import { getTranslations } from 'next-intl/server'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { AdjustStockDialog } from '@/components/inventory/adjust-stock-dialog'
@@ -27,16 +29,17 @@ type Row = {
 }
 
 function InventoryTable({ rows, column }: { rows: Row[]; column: keyof StockView }) {
+  const t = useTranslations('Inventory')
   const filtered = rows.filter((r) => r.view[column] > 0)
   return (
     <Card className="overflow-hidden p-0">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Product</TableHead>
-            <TableHead>SKU</TableHead>
-            <TableHead className="text-right">Qty</TableHead>
-            <TableHead className="text-right">Value (USD)</TableHead>
+            <TableHead>{t('product')}</TableHead>
+            <TableHead>{t('sku')}</TableHead>
+            <TableHead className="text-right">{t('qty')}</TableHead>
+            <TableHead className="text-right">{t('valueUsd')}</TableHead>
             <TableHead className="w-12" />
           </TableRow>
         </TableHeader>
@@ -44,7 +47,7 @@ function InventoryTable({ rows, column }: { rows: Row[]; column: keyof StockView
           {filtered.length === 0 && (
             <TableRow>
               <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                Nothing here.
+                {t('nothingHere')}
               </TableCell>
             </TableRow>
           )}
@@ -59,7 +62,7 @@ function InventoryTable({ rows, column }: { rows: Row[]; column: keyof StockView
                   <span className={low ? 'font-semibold text-destructive' : ''}>{qty}</span>
                   {low && (
                     <Badge variant="destructive" className="ml-2">
-                      Low
+                      {t('low')}
                     </Badge>
                   )}
                 </TableCell>
@@ -79,6 +82,7 @@ function InventoryTable({ rows, column }: { rows: Row[]; column: keyof StockView
 }
 
 export default async function InventoryPage() {
+  const t = await getTranslations('Inventory')
   const products = await prisma.product.findMany({
     where: { archived: false },
     orderBy: { name: 'asc' },
@@ -99,15 +103,15 @@ export default async function InventoryPage() {
   return (
     <div>
       <PageHeader
-        title="Inventory"
-        description={`Total available value: ${formatUsd(totalValue)}`}
+        title={t('title')}
+        description={t('totalAvailableValue', { value: formatUsd(totalValue) })}
       />
 
       <Tabs defaultValue="available">
         <TabsList>
-          <TabsTrigger value="available">Available</TabsTrigger>
-          <TabsTrigger value="inTransit">In transit</TabsTrigger>
-          <TabsTrigger value="reserved">Reserved</TabsTrigger>
+          <TabsTrigger value="available">{t('available')}</TabsTrigger>
+          <TabsTrigger value="inTransit">{t('inTransit')}</TabsTrigger>
+          <TabsTrigger value="reserved">{t('reserved')}</TabsTrigger>
         </TabsList>
         <TabsContent value="available" className="mt-4">
           <InventoryTable rows={rows} column="available" />

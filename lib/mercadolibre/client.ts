@@ -61,8 +61,11 @@ export interface MlOrder {
   date_created: string
   date_closed?: string
   total_amount: number
+  /// Set when the buyer checked out a cart: every order in it shares the pack,
+  /// and ML shows the pack id to the seller as the sale number.
+  pack_id?: number | null
   order_items: MlOrderItem[]
-  payments?: Array<{ shipping_cost?: number; status?: string }>
+  payments?: Array<{ id?: number; shipping_cost?: number; status?: string }>
   shipping?: { id?: number }
 }
 
@@ -145,6 +148,9 @@ interface MlItemRaw {
   pictures?: Array<{ id?: string; secure_url?: string | null; url?: string | null }>
   secure_thumbnail?: string | null
   thumbnail?: string | null
+  /// The item's id in ML's Full inventory system. Absent for items that were
+  /// never enrolled in Fulfillment.
+  inventory_id?: string | null
 }
 
 /**
@@ -166,6 +172,7 @@ export async function getItem(account: MercadoLibreAccount, itemId: string) {
     title: raw.title,
     seller_custom_field: raw.seller_custom_field ?? attrSku ?? null,
     imageUrl: toHttps(picture?.secure_url ?? picture?.url ?? raw.secure_thumbnail ?? raw.thumbnail),
+    inventoryId: raw.inventory_id ?? null,
   }
 }
 
@@ -178,9 +185,151 @@ function toHttps(url: string | null | undefined): string | null {
 export const getShipment = (account: MercadoLibreAccount, shipmentId: string) =>
   mlGet<{ id: number; status: string }>(account, `/shipments/${shipmentId}`)
 
+/** The number ML shows the seller as "Venta #" for this order. */
+export function saleNumberOf(order: MlOrder): string {
+  return String(order.pack_id ?? order.id)
+}
+
+// ── Payout (Mercado Pago) ───────────────────────────────────────────────────
+
+const MP_API_BASE = 'https://api.mercadopago.com'
+
+interface MpPayment {
+  id: number
+  status: string
+  transaction_amount: number
+  transaction_details?: { net_received_amount?: number | null }
+  charges_details?: Array<{
+    type: string
+    accounts?: { from?: string; to?: string }
+    amounts?: { original?: number; refunded?: number }
+  }>
+}
+
+export interface OrderPayout {
+  /** What the buyer paid for the goods. */
+  grossArs: number
+  /** ML's selling fee. */
+  feeArs: number
+  /** Shipping charged to the seller. */
+  shippingArs: number
+  /** Taxes withheld (e.g. the IIBB retention). */
+  taxArs: number
+  /** What lands in the account, after every charge. */
+  netReceivedArs: number
+}
+
+/**
+ * What the seller actually receives for an order, read from its Mercado Pago
+ * payments — the only place that carries every deduction:
+ *
+ *   transaction_amount     148617.00
+ *   charges_details  fee   −23035.64   (to ml)
+ *                    ship   −6790.00
+ *                    tax    −7430.85   (to mp)
+ *   net_received_amount    111360.51
+ *
+ * The order alone can't give this: its `payments[].shipping_cost` is what the
+ * BUYER paid (0 on free shipping) and it knows nothing about taxes. The ML
+ * access token is accepted by the MP API for the same user. Only charges the
+ * seller (`collector`) pays count; a pack bills each order on its own payment,
+ * so nothing has to be split.
+ *
+ * Returns null while no payment is approved yet — ML notifies again once it is.
+ */
+export async function getOrderPayout(
+  account: MercadoLibreAccount,
+  order: MlOrder
+): Promise<OrderPayout | null> {
+  const accessToken = await getValidAccessToken(account)
+  const approved = (order.payments ?? []).filter((p) => p.status === 'approved' && p.id)
+  if (approved.length === 0) return null
+
+  const payout: OrderPayout = { grossArs: 0, feeArs: 0, shippingArs: 0, taxArs: 0, netReceivedArs: 0 }
+  for (const { id } of approved) {
+    const res = await fetch(`${MP_API_BASE}/v1/payments/${id}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`MP GET payment ${id} failed (${res.status}): ${text.slice(0, 300)}`)
+    }
+    const payment: MpPayment = await res.json()
+    const net = payment.transaction_details?.net_received_amount
+    // Without it we'd be guessing the payout, which is the thing this exists to avoid.
+    if (typeof net !== 'number') throw new Error(`MP payment ${id} has no net_received_amount`)
+
+    payout.grossArs += payment.transaction_amount
+    payout.netReceivedArs += net
+    for (const charge of payment.charges_details ?? []) {
+      if (charge.accounts?.from && charge.accounts.from !== 'collector') continue
+      const amount = charge.amounts?.original ?? 0
+      if (charge.type === 'fee') payout.feeArs += amount
+      else if (charge.type === 'shipping') payout.shippingArs += amount
+      else if (charge.type === 'tax') payout.taxArs += amount
+    }
+  }
+  return payout
+}
+
 /** Page of the seller's item ids for the account. */
 export const getSellerItemIds = (account: MercadoLibreAccount, offset = 0, limit = 50) =>
   mlGet<{ results: string[]; paging: { total: number } }>(
     account,
     `/users/${account.mlUserId}/items/search?offset=${offset}&limit=${limit}`
   )
+
+// ── Fulfillment (Full) stock ────────────────────────────────────────────────
+
+export interface MlFulfillmentStock {
+  inventory_id: string
+  total: number
+  available_quantity: number
+  not_available_quantity: number
+  not_available_detail: Array<{ status: string; quantity: number }>
+}
+
+/** Current stock across all Full warehouses for one inventory_id. */
+export const getFulfillmentStock = (account: MercadoLibreAccount, inventoryId: string) =>
+  mlGet<MlFulfillmentStock>(account, `/inventories/${inventoryId}/stock/fulfillment`)
+
+export interface MlFulfillmentOperation {
+  id: number
+  seller_id: number
+  inventory_id: string
+  date_created: string
+  type: string
+  external_references?: Array<{ type: string; value: string }>
+}
+
+export interface MlFulfillmentOperationsSearch {
+  paging: { total: number; scroll?: string | null }
+  results: MlFulfillmentOperation[]
+}
+
+/**
+ * Stock operations (sales, adjustments, inbound receptions...) for one or more
+ * inventory_ids. `type: 'INBOUND_RECEPTION'` is what confirms a Full shipment
+ * arrived — its `external_references` then carry `{ type: 'inbound_id', value }`,
+ * the same id the seller panel handed out when the inbound was created.
+ *
+ * ML defaults `date_from`/`date_to` to the last 15 days when omitted, so a
+ * shipment sent longer ago than that must pass explicit dates.
+ */
+export const searchFulfillmentOperations = (
+  account: MercadoLibreAccount,
+  params: { inventoryIds: string[]; type?: string; dateFrom?: string; dateTo?: string }
+) => {
+  const qs = new URLSearchParams({
+    seller_id: account.mlUserId,
+    inventory_id: params.inventoryIds.join(','),
+  })
+  if (params.type) qs.set('type', params.type)
+  if (params.dateFrom) qs.set('date_from', params.dateFrom)
+  if (params.dateTo) qs.set('date_to', params.dateTo)
+  return mlGet<MlFulfillmentOperationsSearch>(
+    account,
+    `/stock/fulfillment/operations/search?${qs}`
+  )
+}

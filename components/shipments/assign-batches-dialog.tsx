@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { PackagePlus } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -29,6 +30,7 @@ interface UnassignedBatch {
 
 /** Puts already-registered purchases into this box. */
 export function AssignBatchesDialog({ shipmentId }: { shipmentId: string }) {
+  const t = useTranslations('AssignBatches')
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -44,7 +46,7 @@ export function AssignBatchesDialog({ shipmentId }: { shipmentId: string }) {
     setSelected(new Set())
     getUnassignedBatches()
       .then(setBatches)
-      .catch(() => toast.error('Could not load purchases'))
+      .catch(() => toast.error(t('couldNotLoad')))
   }
 
   function toggle(id: string) {
@@ -60,7 +62,7 @@ export function AssignBatchesDialog({ shipmentId }: { shipmentId: string }) {
     startTransition(async () => {
       const res = await assignBatches([...selected], shipmentId)
       if (res.ok) {
-        toast.success(`Added ${selected.size} purchase${selected.size === 1 ? '' : 's'}`)
+        toast.success(t('addedPurchases', { count: selected.size }))
         setOpen(false)
         router.refresh()
       } else {
@@ -74,23 +76,19 @@ export function AssignBatchesDialog({ shipmentId }: { shipmentId: string }) {
       <DialogTrigger asChild>
         <Button variant="outline">
           <PackagePlus className="size-4" />
-          Add purchases
+          {t('addPurchases')}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add purchases to this shipment</DialogTitle>
-          <DialogDescription>
-            Purchases that haven’t left for Argentina in another box yet.
-          </DialogDescription>
+          <DialogTitle>{t('addPurchasesToShipment')}</DialogTitle>
+          <DialogDescription>{t('unassignedExplainer')}</DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-80 pr-4">
-          {batches === null && <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>}
+          {batches === null && <p className="py-6 text-center text-sm text-muted-foreground">{t('loading')}</p>}
           {batches?.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Nothing unassigned — every purchase is already in a shipment.
-            </p>
+            <p className="py-6 text-center text-sm text-muted-foreground">{t('nothingUnassigned')}</p>
           )}
           <div className="space-y-1">
             {batches?.map((b) => (
@@ -102,8 +100,8 @@ export function AssignBatchesDialog({ shipmentId }: { shipmentId: string }) {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{b.product.name}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {b.product.sku} · {b.quantity} units · {formatUsd(b.unitCostUsd)}/unit ·{' '}
-                    {formatDate(b.purchasedAt)}
+                    {b.product.sku} · {t('unitsCount', { count: b.quantity })} ·{' '}
+                    {t('perUnit', { value: formatUsd(b.unitCostUsd) })} · {formatDate(b.purchasedAt)}
                   </span>
                 </span>
               </label>
@@ -113,7 +111,7 @@ export function AssignBatchesDialog({ shipmentId }: { shipmentId: string }) {
 
         <DialogFooter>
           <Button onClick={onAssign} disabled={pending || selected.size === 0}>
-            {pending ? 'Adding…' : `Add ${selected.size || ''}`.trim()}
+            {pending ? t('addingEllipsis') : t('addCount', { count: selected.size })}
           </Button>
         </DialogFooter>
       </DialogContent>

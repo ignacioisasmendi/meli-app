@@ -90,6 +90,16 @@ enum JobStatus {
   FAILED
 }
 
+/// A box sent from the local depot to a Mercado Libre Full warehouse.
+///   SENT     — created in the CRM with the inbound ID Mercado Libre assigned
+///              in the seller panel; physically on its way.
+///   RECEIVED — `syncFullShipmentReceptions` found a matching INBOUND_RECEPTION
+///              operation on ML's side (or it was confirmed by hand).
+enum FullShipmentStatus {
+  SENT
+  RECEIVED
+}
+
 // ---------------------------------------------------------------------------
 // Identity
 // ---------------------------------------------------------------------------
@@ -119,8 +129,9 @@ model MercadoLibreAccount {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  sales    Sale[]
-  listings MlListing[]
+  sales         Sale[]
+  listings      MlListing[]
+  fullShipments FullShipment[]
 
   @@map("mercadolibre_accounts")
 }
@@ -153,11 +164,11 @@ model Product {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  purchases Purchase[]
-  batches   InventoryBatch[]
-  sales     Sale[]
-  movements InventoryMovement[]
-  listings  MlListing[]
+  purchases  Purchase[]
+  batches    InventoryBatch[]
+  sales      Sale[]
+  movements  InventoryMovement[]
+  listings   MlListing[]
   candidates OpportunityCandidate[]
 
   @@index([archived])
@@ -301,24 +312,61 @@ model Shipment {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
+  /// The Full inbound this shipment's stock was consolidated into, once it
+  /// physically left the local depot for Mercado Libre's warehouse.
+  fullShipmentId String?
+  fullShipment   FullShipment? @relation(fields: [fullShipmentId], references: [id], onDelete: SetNull)
+
   batches InventoryBatch[]
 
   @@index([status])
+  @@index([fullShipmentId])
   @@map("shipments")
+}
+
+/// A physical box consolidating one or more already-landed `Shipment`s and
+/// sent on to a Mercado Libre Full warehouse. There is no API to create the
+/// inbound request itself — that happens by hand in ML's seller panel, which
+/// hands back `mlInboundId`. `syncFullShipmentReceptions` (run on a cron)
+/// polls `/stock/fulfillment/operations/search` for an INBOUND_RECEPTION
+/// operation whose `external_references` carry that same id, and that is what
+/// flips this to RECEIVED.
+model FullShipment {
+  id          String              @id @default(cuid())
+  accountId   String
+  account     MercadoLibreAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  /// Pasted in from Mercado Libre's seller panel when the inbound is created.
+  mlInboundId String
+  status      FullShipmentStatus  @default(SENT)
+  sentAt      DateTime            @default(now())
+  receivedAt  DateTime?
+  notes       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  shipments Shipment[]
+
+  @@unique([accountId, mlInboundId])
+  @@index([status])
+  @@map("full_shipments")
 }
 
 /// Maps a Mercado Libre listing (item) on a given account to an internal Product.
 model MlListing {
-  id        String              @id @default(cuid())
-  accountId String
-  account   MercadoLibreAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  mlItemId  String
-  productId String?
-  product   Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
-  sku       String?
-  title     String?
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  id          String              @id @default(cuid())
+  accountId   String
+  account     MercadoLibreAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  mlItemId    String
+  productId   String?
+  product     Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  sku         String?
+  title       String?
+  /// This item's id in ML's Full inventory system, fetched lazily from
+  /// `GET /items/$ITEM_ID` the first time a Full shipment needs to look up
+  /// stock operations for it. Null for listings that never touched Full.
+  inventoryId String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   @@unique([accountId, mlItemId])
   @@index([productId])
@@ -341,14 +389,28 @@ model MlListing {
 model Sale {
   id           String              @id @default(cuid())
   mlOrderId    String              @unique
+  /// The number ML shows the seller as "Venta #": the pack id when the buyer
+  /// checked out a cart (one pack, several orders), the order id otherwise.
+  saleNumber   String
   accountId    String
   account      MercadoLibreAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
   productId    String
   product      Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
   quantity     Int
   salePriceArs Float
+  /// The payout breakdown, read from the Mercado Pago payment's
+  /// `charges_details` rather than the order: the order only knows the ML fee,
+  /// its `shipping_cost` is what the BUYER paid, and it has no taxes at all.
+  /// ML's selling fee.
   feeArs       Float               @default(0)
+  /// Shipping charged to the seller, not what the buyer paid.
   shippingArs  Float               @default(0)
+  /// Taxes withheld by Mercado Pago (e.g. the IIBB retention).
+  taxArs       Float               @default(0)
+  /// What actually lands in the account: `net_received_amount`. Stored as ML
+  /// reports it, not derived, because a payment can carry charge types beyond
+  /// fee/shipping/tax. `profitUsd` is computed from this.
+  netReceivedArs Float             @default(0)
   profitUsd    Float               @default(0)
   /// FIFO cost of goods sold, as `applySale` valued it at sale time. Stored
   /// because it can't be recovered later: batches get re-costed and the USD/ARS
@@ -358,16 +420,16 @@ model Sale {
   soldAt       DateTime
   createdAt    DateTime            @default(now())
 
-  status SaleStatus @default(CONFIRMED)
+  status            SaleStatus @default(CONFIRMED)
   /// Units reversed so far. Less than `quantity` on a partial return.
-  returnedQuantity Int        @default(0)
+  returnedQuantity  Int        @default(0)
   /// Units already back on the shelf. Trails `returnedQuantity` while goods are
   /// in the mail, and stays behind it permanently for a write-off.
-  restockedQuantity Int       @default(0)
+  restockedQuantity Int        @default(0)
   /// Gross revenue handed back to the buyer.
-  refundedArs       Float     @default(0)
+  refundedArs       Float      @default(0)
   /// Profit backed out of reporting.
-  reversedProfitUsd Float     @default(0)
+  reversedProfitUsd Float      @default(0)
   /// The ML claim that triggered this, when it came from post-purchase rather
   /// than an outright order cancellation.
   mlClaimId         String?
@@ -381,6 +443,7 @@ model Sale {
   @@index([soldAt])
   @@index([status])
   @@index([mlClaimId])
+  @@index([saleNumber])
   @@map("sales")
 }
 
@@ -392,18 +455,18 @@ model Sale {
 /// different landed costs. Recording the split makes a reversal exact — and
 /// doubles as the per-sale COGS audit trail.
 model SaleBatchConsumption {
-  id      String         @id @default(cuid())
-  saleId  String
-  sale    Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  batchId String?
-  batch   InventoryBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
-  quantity    Int
+  id               String          @id @default(cuid())
+  saleId           String
+  sale             Sale            @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  batchId          String?
+  batch            InventoryBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  quantity         Int
   /// Frozen copy of the batch's landed cost at consumption time, so reversal
   /// value survives the batch being re-costed or deleted.
-  unitCostUsd Float
+  unitCostUsd      Float
   /// Units of this line already restored.
-  restoredQuantity Int      @default(0)
-  createdAt        DateTime @default(now())
+  restoredQuantity Int             @default(0)
+  createdAt        DateTime        @default(now())
 
   @@index([saleId])
   @@index([batchId])
@@ -445,10 +508,10 @@ model WebhookEvent {
   /// unique over `sentAt`, because Postgres treats NULLs as distinct — a
   /// nullable member would make the constraint stop deduping exactly for the
   /// payloads that omit `sent`.
-  dedupeKey String @unique
-  id        String @id @default(cuid())
-  topic     String
-  resource  String
+  dedupeKey   String        @unique
+  id          String        @id @default(cuid())
+  topic       String
+  resource    String
   /// The notification's own `sent` timestamp, kept for debugging delivery order.
   sentAt      DateTime?
   mlUserId    String?
@@ -508,11 +571,11 @@ enum OpportunityStatus {
 /// freight rate and ML's fee all move, and a candidate has to stay explainable
 /// as of the day it was scored. `PriceObservation` carries the moving picture.
 model OpportunityCandidate {
-  id    String @id @default(cuid())
-  asin  String?
-  title String
-  brand String
-  model String?
+  id       String  @id @default(cuid())
+  asin     String?
+  title    String
+  brand    String
+  model    String?
   /// Normalized `brand + model`, the dedupe key. Two listings that differ only
   /// in wording, colour or capacity collapse onto the same value.
   modelKey String
@@ -523,10 +586,10 @@ model OpportunityCandidate {
   weightGrams    Float
 
   // ── Sale side (Mercado Libre) ──
-  mlPriceArs    Float
-  mlSoldQty     Int?
-  mlPermalink   String?
-  mlCategoryId  String?
+  mlPriceArs   Float
+  mlSoldQty    Int?
+  mlPermalink  String?
+  mlCategoryId String?
 
   // ── The snapshot the verdict was based on ──
   usdArsRate        Float
@@ -543,8 +606,8 @@ model OpportunityCandidate {
   status         OpportunityStatus @default(NEW)
   rejectedReason String?
   /// Set when this candidate is already something we stock.
-  productId String?
-  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId      String?
+  product        Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   scannedAt DateTime @default(now())
   createdAt DateTime @default(now())

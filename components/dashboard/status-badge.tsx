@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -15,29 +16,19 @@ const STATUS_STYLES: Record<string, string> = {
   RETURN_PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
   RETURNED: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
   REFUNDED: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
-}
-
-const LABELS: Record<string, string> = {
-  PURCHASED: 'Purchased',
-  IN_USA: 'In USA',
-  IN_TRANSIT: 'In transit',
-  CUSTOMS: 'Customs',
-  WAREHOUSE: 'Warehouse',
-  AVAILABLE: 'Available',
-  CONFIRMED: 'Confirmed',
-  CANCELLED: 'Cancelled',
-  RETURN_PENDING: 'Return pending',
-  RETURNED: 'Returned',
-  REFUNDED: 'Refunded',
+  // Full shipment statuses.
+  SENT: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  RECEIVED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
 }
 
 export function StatusBadge({ status }: { status: string }) {
+  const t = useTranslations('Status')
   return (
     <Badge
       variant="secondary"
       className={cn('border-transparent font-medium', STATUS_STYLES[status])}
     >
-      {LABELS[status] ?? status}
+      {t.has(status) ? t(status) : status}
     </Badge>
   )
 }

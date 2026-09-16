@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -30,6 +31,8 @@ interface ProductFormDialogProps {
 }
 
 export function ProductFormDialog({ product, trigger }: ProductFormDialogProps) {
+  const t = useTranslations('ProductForm')
+  const tCommon = useTranslations('Common')
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const editing = Boolean(product)
@@ -41,13 +44,13 @@ export function ProductFormDialog({ product, trigger }: ProductFormDialogProps) 
           ? await updateProduct(product!.id, formData)
           : await createProduct(formData)
         if (result.ok) {
-          toast.success(editing ? 'Product updated' : 'Product created')
+          toast.success(editing ? t('productUpdated') : t('productCreated'))
           setOpen(false)
         } else {
           toast.error(result.error)
         }
       } catch {
-        toast.error('Something went wrong. Please try again.')
+        toast.error(tCommon('somethingWentWrong'))
       }
     })
   }
@@ -58,35 +61,35 @@ export function ProductFormDialog({ product, trigger }: ProductFormDialogProps) 
         {trigger ?? (
           <Button>
             <Plus className="size-4" />
-            New product
+            {t('newProduct')}
           </Button>
         )}
       </DialogTrigger>
       <DialogContent>
         <form action={onSubmit}>
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit product' : 'New product'}</DialogTitle>
+            <DialogTitle>{editing ? t('editProduct') : t('newProduct')}</DialogTitle>
             <DialogDescription>
-              {editing ? 'Update the product details.' : 'Add a product to the catalog.'}
+              {editing ? t('updateDetails') : t('addToCatalog')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="sku">SKU</Label>
+              <Label htmlFor="sku">{t('sku')}</Label>
               <Input id="sku" name="sku" defaultValue={product?.sku} required />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">{t('name')}</Label>
               <Input id="name" name="name" defaultValue={product?.name} required />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="brand">Brand</Label>
+              <Label htmlFor="brand">{t('brand')}</Label>
               <Input id="brand" name="brand" defaultValue={product?.brand ?? ''} />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="minStock">Minimum stock</Label>
+                <Label htmlFor="minStock">{t('minimumStock')}</Label>
                 <Input
                   id="minStock"
                   name="minStock"
@@ -96,7 +99,7 @@ export function ProductFormDialog({ product, trigger }: ProductFormDialogProps) 
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="weightGrams">Unit weight (g)</Label>
+                <Label htmlFor="weightGrams">{t('unitWeight')}</Label>
                 <Input
                   id="weightGrams"
                   name="weightGrams"
@@ -106,16 +109,14 @@ export function ProductFormDialog({ product, trigger }: ProductFormDialogProps) 
                   defaultValue={product?.weightGrams ?? ''}
                   placeholder="0"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Used to split shipment freight. Leave blank to split by value instead.
-                </p>
+                <p className="text-xs text-muted-foreground">{t('weightHint')}</p>
               </div>
             </div>
           </div>
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
-              {isPending ? 'Saving…' : editing ? 'Save changes' : 'Create product'}
+              {isPending ? tCommon('saving') : editing ? tCommon('saveChanges') : t('createProduct')}
             </Button>
           </DialogFooter>
         </form>

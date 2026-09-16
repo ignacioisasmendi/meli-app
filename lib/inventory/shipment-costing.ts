@@ -8,7 +8,12 @@ import 'server-only'
 import { BatchStatus, PurchaseStatus, ShipmentStatus, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recomputeAverageCost } from '@/lib/inventory/stock'
-import { allocateFreight, shipmentBill, type FreightLine } from '@/lib/inventory/shipment'
+import {
+  allocateFreight,
+  shipmentBill,
+  type FallbackReason,
+  type FreightLine,
+} from '@/lib/inventory/shipment'
 
 type Tx = Prisma.TransactionClient
 
@@ -25,7 +30,7 @@ export interface CostingSummary {
   productCount: number
   totalBillUsd: number
   basis: string
-  fallbackReason: string | null
+  fallbackReason: FallbackReason | null
   residualUsd: number
   /**
    * Units already sold out of the re-costed batches. Normally zero — a batch is

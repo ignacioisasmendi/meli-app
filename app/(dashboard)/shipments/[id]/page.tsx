@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import { Pencil } from 'lucide-react'
 import { ShipmentStatus } from '@prisma/client'
 import { PageHeader } from '@/components/dashboard/page-header'
@@ -11,7 +12,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { formatDate } from '@/lib/utils'
 import { getShipment } from '@/lib/inventory/shipment-costing'
 import { getUsdArsRate } from '@/lib/settings'
-import { SHIPMENT_STATUS_LABELS } from '@/lib/statuses'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,28 +20,26 @@ export default async function ShipmentDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  const t = await getTranslations('ShipmentDetail')
+  const tStatus = await getTranslations('Status')
   const { id } = await params
   const [shipment, usdArsRate] = await Promise.all([getShipment(id), getUsdArsRate()])
   if (!shipment) notFound()
 
   const costed = shipment.status === ShipmentStatus.COSTED
   const stats = [
-    { label: 'Status', value: SHIPMENT_STATUS_LABELS[shipment.status] },
-    { label: 'Purchases', value: shipment.batches.length },
-    { label: 'Departed', value: shipment.departedAt ? formatDate(shipment.departedAt) : '—' },
-    { label: 'Arrived', value: shipment.arrivedAt ? formatDate(shipment.arrivedAt) : '—' },
-    { label: 'Costed', value: shipment.costedAt ? formatDate(shipment.costedAt) : '—' },
+    { label: t('status'), value: tStatus(shipment.status) },
+    { label: t('purchases'), value: shipment.batches.length },
+    { label: t('departed'), value: shipment.departedAt ? formatDate(shipment.departedAt) : '—' },
+    { label: t('arrived'), value: shipment.arrivedAt ? formatDate(shipment.arrivedAt) : '—' },
+    { label: t('costed'), value: shipment.costedAt ? formatDate(shipment.costedAt) : '—' },
   ]
 
   return (
     <div>
       <PageHeader
         title={shipment.code}
-        description={
-          costed
-            ? 'Costed — freight is folded into every unit’s landed cost.'
-            : 'Add the purchases travelling in this box, then enter the courier bill when it lands.'
-        }
+        description={costed ? t('costedDescription') : t('openDescription')}
         action={
           <div className="flex gap-2">
             {!costed && (
@@ -62,7 +60,7 @@ export default async function ShipmentDetailPage({
               trigger={
                 <Button variant="outline">
                   <Pencil className="size-4" />
-                  Edit
+                  {t('edit')}
                 </Button>
               }
             />

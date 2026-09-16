@@ -33,12 +33,17 @@ export interface AllocatedLine {
   share: number
 }
 
+/** Structured reason for a basis fallback — translated at the render site. */
+export type FallbackReason =
+  | { code: 'missingWeight'; missingCount: number; fallbackBasis: 'VALUE' | 'UNITS' }
+  | { code: 'noCost' }
+
 export interface AllocationResult {
   lines: AllocatedLine[]
   /** The basis actually used — may differ from the one asked for (see below). */
   basis: AllocationBasis
   /** Set when the requested basis was unusable, explaining the fallback. */
-  fallbackReason: string | null
+  fallbackReason: FallbackReason | null
   /**
    * Bill minus the sum of the allocated line totals. Non-zero by a few cents
    * whenever the split doesn't divide evenly into whole cents per unit; shown
@@ -68,7 +73,7 @@ const valueOf = (l: FreightLine) => Math.max(0, l.goodsUnitCostUsd) * qtyOf(l)
 export function resolveBasis(
   lines: FreightLine[],
   preferred: AllocationBasis
-): { basis: AllocationBasis; fallbackReason: string | null } {
+): { basis: AllocationBasis; fallbackReason: FallbackReason | null } {
   const hasUnits = lines.some((l) => qtyOf(l) > 0)
   if (!hasUnits) return { basis: preferred, fallbackReason: null }
 
@@ -79,16 +84,17 @@ export function resolveBasis(
       (l) => l.unitWeightGrams == null || l.unitWeightGrams <= 0
     ).length
     if (missing === 0) return { basis: AllocationBasis.WEIGHT, fallbackReason: null }
+    const fallbackBasis = hasValue ? 'VALUE' : 'UNITS'
     return {
       basis: hasValue ? AllocationBasis.VALUE : AllocationBasis.UNITS,
-      fallbackReason: `${missing} product${missing === 1 ? ' is' : 's are'} missing a weight — splitting by ${hasValue ? 'value' : 'units'} instead`,
+      fallbackReason: { code: 'missingWeight', missingCount: missing, fallbackBasis },
     }
   }
 
   if (preferred === AllocationBasis.VALUE && !hasValue) {
     return {
       basis: AllocationBasis.UNITS,
-      fallbackReason: 'No line has a cost yet — splitting evenly per unit instead',
+      fallbackReason: { code: 'noCost' },
     }
   }
 

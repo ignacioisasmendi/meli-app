@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import { LogOut, Settings } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ThemeToggle } from './theme-toggle'
 
-export function Topbar({ user }: { user: { name?: string | null; email?: string | null } }) {
+export async function Topbar({ user }: { user: { name?: string | null; email?: string | null } }) {
+  const t = await getTranslations('Topbar')
   const initials = (user.name ?? user.email ?? '?')
     .split(' ')
     .map((p) => p[0])
@@ -40,13 +42,13 @@ export function Topbar({ user }: { user: { name?: string | null; email?: string 
           <DropdownMenuItem asChild>
             <Link href="/settings" className="flex items-center gap-2">
               <Settings className="size-4" />
-              Settings
+              {t('settings')}
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link href="/auth/logout" className="flex items-center gap-2">
               <LogOut className="size-4" />
-              Log out
+              {t('logOut')}
             </Link>
           </DropdownMenuItem>
         </DropdownMenuContent>

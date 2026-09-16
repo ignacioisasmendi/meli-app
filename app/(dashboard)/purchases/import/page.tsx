@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server'
 import { ShipmentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
@@ -6,6 +7,7 @@ import { PurchaseImport } from '@/components/purchases/purchase-import'
 export const dynamic = 'force-dynamic'
 
 export default async function ImportPurchasesPage() {
+  const t = await getTranslations('PurchaseImport')
   const [products, shipments] = await Promise.all([
     prisma.product.findMany({
       where: { archived: false },
@@ -21,10 +23,7 @@ export default async function ImportPurchasesPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Import purchases"
-        description="Fill this in from an Amazon order screenshot, or enter the items by hand — tax + shipping are split across items into each per-unit landed cost."
-      />
+      <PageHeader title={t('title')} description={t('description')} />
       <PurchaseImport
         products={products}
         shipments={shipments}

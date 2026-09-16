@@ -1,4 +1,6 @@
 import { Download } from 'lucide-react'
+import { useTranslations } from 'next-intl'
+import { getTranslations } from 'next-intl/server'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -23,17 +25,19 @@ import { formatArs, formatDate, formatNumber, formatPercent, formatUsd } from '@
 export const dynamic = 'force-dynamic'
 
 function ExportButton({ type }: { type: string }) {
+  const t = useTranslations('Reports')
   return (
     <Button asChild variant="outline" size="sm">
       <a href={`/api/reports/${type}`}>
         <Download className="size-4" />
-        Export CSV
+        {t('exportCsv')}
       </a>
     </Button>
   )
 }
 
 export default async function ReportsPage() {
+  const t = await getTranslations('Reports')
   const [inventory, sales, purchases, profitability] = await Promise.all([
     getInventoryReport(),
     getSalesReport(),
@@ -43,14 +47,14 @@ export default async function ReportsPage() {
 
   return (
     <div>
-      <PageHeader title="Reports" description="Inventory, sales, purchases and profitability." />
+      <PageHeader title={t('title')} description={t('description')} />
 
       <Tabs defaultValue="inventory">
         <TabsList>
-          <TabsTrigger value="inventory">Inventory</TabsTrigger>
-          <TabsTrigger value="sales">Sales</TabsTrigger>
-          <TabsTrigger value="purchases">Purchases</TabsTrigger>
-          <TabsTrigger value="profitability">Profitability</TabsTrigger>
+          <TabsTrigger value="inventory">{t('inventory')}</TabsTrigger>
+          <TabsTrigger value="sales">{t('sales')}</TabsTrigger>
+          <TabsTrigger value="purchases">{t('purchases')}</TabsTrigger>
+          <TabsTrigger value="profitability">{t('profitability')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="inventory" className="mt-4 space-y-3">
@@ -61,12 +65,12 @@ export default async function ReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Available</TableHead>
-                  <TableHead className="text-right">In transit</TableHead>
-                  <TableHead className="text-right">Reserved</TableHead>
-                  <TableHead className="text-right">Value (USD)</TableHead>
+                  <TableHead>{t('sku')}</TableHead>
+                  <TableHead>{t('product')}</TableHead>
+                  <TableHead className="text-right">{t('available')}</TableHead>
+                  <TableHead className="text-right">{t('inTransit')}</TableHead>
+                  <TableHead className="text-right">{t('reserved')}</TableHead>
+                  <TableHead className="text-right">{t('valueUsd')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -93,13 +97,13 @@ export default async function ReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Revenue</TableHead>
-                  <TableHead className="text-right">Profit (USD)</TableHead>
+                  <TableHead>{t('date')}</TableHead>
+                  <TableHead>{t('product')}</TableHead>
+                  <TableHead>{t('account')}</TableHead>
+                  <TableHead>{t('status')}</TableHead>
+                  <TableHead className="text-right">{t('qty')}</TableHead>
+                  <TableHead className="text-right">{t('revenue')}</TableHead>
+                  <TableHead className="text-right">{t('profitUsd')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -129,11 +133,11 @@ export default async function ReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Total cost</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('date')}</TableHead>
+                  <TableHead>{t('product')}</TableHead>
+                  <TableHead className="text-right">{t('qty')}</TableHead>
+                  <TableHead className="text-right">{t('totalCost')}</TableHead>
+                  <TableHead>{t('status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -161,12 +165,12 @@ export default async function ReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Units</TableHead>
-                  <TableHead className="text-right">Revenue</TableHead>
-                  <TableHead className="text-right">Cost</TableHead>
-                  <TableHead className="text-right">Profit</TableHead>
-                  <TableHead className="text-right">Margin</TableHead>
+                  <TableHead>{t('product')}</TableHead>
+                  <TableHead className="text-right">{t('units')}</TableHead>
+                  <TableHead className="text-right">{t('revenue')}</TableHead>
+                  <TableHead className="text-right">{t('cost')}</TableHead>
+                  <TableHead className="text-right">{t('profit')}</TableHead>
+                  <TableHead className="text-right">{t('margin')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

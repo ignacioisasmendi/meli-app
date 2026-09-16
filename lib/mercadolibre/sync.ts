@@ -19,7 +19,9 @@ import {
   getSellerItemIds,
   getClaim,
   getClaimExpectedResolutions,
+  getOrderPayout,
   orderStatusDetail,
+  saleNumberOf,
   type MlOrder,
 } from '@/lib/mercadolibre/client'
 
@@ -160,10 +162,16 @@ export async function processOrder(
     return { status: 'skipped', reason: 'unmapped_item' }
   }
 
+  // Profit runs on what reaches us, so the payout comes from Mercado Pago.
+  // Fetched before the transaction: a failure throws (the webhook event is marked
+  // FAILED and ML's next notification for the order picks it up) rather than
+  // booking a sale on a guessed payout. Nothing is booked until payment clears.
+  const payout = await getOrderPayout(account, order)
+  if (!payout) return { status: 'skipped', reason: 'not_paid' }
+
   const quantity = line.quantity
   const salePriceArs = line.unit_price * quantity
-  const feeArs = (line.sale_fee ?? 0) * quantity
-  const shippingArs = (order.payments ?? []).reduce((s, p) => s + (p.shipping_cost ?? 0), 0)
+  const { feeArs, shippingArs, taxArs, netReceivedArs } = payout
   const soldAt = new Date(order.date_closed ?? order.date_created)
 
   // Stock + sale row in one transaction; profit is computed from FIFO cost.
@@ -176,12 +184,15 @@ export async function processOrder(
     const sale = await tx.sale.create({
       data: {
         mlOrderId,
+        saleNumber: saleNumberOf(order),
         accountId: account.id,
         productId,
         quantity,
         salePriceArs,
         feeArs,
         shippingArs,
+        taxArs,
+        netReceivedArs,
         costUsd,
         profitUsd: 0, // set below once rate is known
         soldAt,
@@ -193,7 +204,7 @@ export async function processOrder(
     return { saleId: sale.id, costUsd }
   })
 
-  const profit = await computeProfitWithRate({ salePriceArs, feeArs, shippingArs, costUsd })
+  const profit = await computeProfitWithRate({ netReceivedArs, costUsd })
   await prisma.sale.update({ where: { id: saleId }, data: { profitUsd: profit.profitUsd } })
 
   const product = await prisma.product.findUniqueOrThrow({ where: { id: productId } })
@@ -204,7 +215,13 @@ export async function processOrder(
       productName: product.name,
       quantity,
       accountNickname: account.nickname,
+      saleNumber: saleNumberOf(order),
       priceArs: salePriceArs,
+      feeArs,
+      shippingArs,
+      taxArs,
+      receivedArs: netReceivedArs,
+      profitUsd: profit.profitUsd,
       remainingStock: view.available,
     })
   )

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { ShipmentFormDialog } from '@/components/shipments/shipment-form-dialog'
@@ -15,11 +16,13 @@ import {
 } from '@/components/ui/table'
 import { formatDate, formatUsd } from '@/lib/utils'
 import { shipmentBill } from '@/lib/inventory/shipment'
-import { ALLOCATION_BASIS_LABELS } from '@/lib/statuses'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ShipmentsPage() {
+  const t = await getTranslations('Shipments')
+  const tBasis = await getTranslations('AllocationBasis')
+  const tStatus = await getTranslations('Status')
   const shipments = await prisma.shipment.findMany({
     include: {
       batches: { select: { quantity: true, goodsUnitCostUsd: true } },
@@ -31,8 +34,8 @@ export default async function ShipmentsPage() {
   return (
     <div>
       <PageHeader
-        title="Shipments"
-        description="Each box travelling to Argentina. Enter the courier bill when one lands and it is split across everything inside."
+        title={t('title')}
+        description={t('description')}
         action={<ShipmentFormDialog />}
       />
 
@@ -40,20 +43,20 @@ export default async function ShipmentsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Code</TableHead>
-              <TableHead>Courier</TableHead>
-              <TableHead className="text-right">Units</TableHead>
-              <TableHead className="text-right">Goods</TableHead>
-              <TableHead className="text-right">Freight</TableHead>
-              <TableHead>Split</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>{t('code')}</TableHead>
+              <TableHead>{t('courier')}</TableHead>
+              <TableHead className="text-right">{t('units')}</TableHead>
+              <TableHead className="text-right">{t('goods')}</TableHead>
+              <TableHead className="text-right">{t('freight')}</TableHead>
+              <TableHead>{t('split')}</TableHead>
+              <TableHead>{t('status')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {shipments.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                  No shipments yet. Create one, then add the purchases travelling in it.
+                  {t('noShipmentsYet')}
                 </TableCell>
               </TableRow>
             )}
@@ -79,14 +82,14 @@ export default async function ShipmentsPage() {
                       formatUsd(bill)
                     ) : s.estimatedUsd > 0 ? (
                       <span className="text-muted-foreground">
-                        ~{formatUsd(s.estimatedUsd)} est.
+                        {t('estimateValue', { value: formatUsd(s.estimatedUsd) })}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {ALLOCATION_BASIS_LABELS[s.basis]}
+                    {tBasis(s.basis)}
                   </TableCell>
                   <TableCell>
                     {s.status === 'COSTED' ? (
@@ -94,7 +97,7 @@ export default async function ShipmentsPage() {
                         variant="secondary"
                         className="border-transparent bg-emerald-100 font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
                       >
-                        Costed
+                        {tStatus('COSTED')}
                       </Badge>
                     ) : (
                       <ShipmentStatusSelect shipmentId={s.id} status={s.status} />

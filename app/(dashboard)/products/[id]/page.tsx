@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import { Pencil } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
@@ -29,6 +30,8 @@ export default async function ProductDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  const t = await getTranslations('ProductDetail')
+  const tMove = await getTranslations('MovementType')
   const { id } = await params
   const product = await prisma.product.findUnique({
     where: { id },
@@ -44,19 +47,19 @@ export default async function ProductDetailPage({
 
   const view = stockViewFrom(product, await getInTransit(product.id))
   const stats = [
-    STAT('Available', view.available),
-    STAT('In transit', view.inTransit),
-    STAT('Reserved', view.reserved),
-    STAT('Total purchased', product.totalPurchased),
-    STAT('Total sold', product.totalSold),
-    STAT('Avg cost', formatUsd(product.averageCostUsd)),
+    STAT(t('available'), view.available),
+    STAT(t('inTransit'), view.inTransit),
+    STAT(t('reserved'), view.reserved),
+    STAT(t('totalPurchased'), product.totalPurchased),
+    STAT(t('totalSold'), product.totalSold),
+    STAT(t('avgCost'), formatUsd(product.averageCostUsd)),
   ]
 
   return (
     <div>
       <PageHeader
         title={product.name}
-        description={`SKU ${product.sku}${product.brand ? ` · ${product.brand}` : ''}`}
+        description={t('skuDescription', { sku: product.sku, brand: product.brand ? ` · ${product.brand}` : '' })}
         leading={<ProductThumb src={product.imageUrl} alt="" size={56} />}
         action={
           <ProductFormDialog
@@ -71,7 +74,7 @@ export default async function ProductDetailPage({
             trigger={
               <Button variant="outline">
                 <Pencil className="size-4" />
-                Edit
+                {t('edit')}
               </Button>
             }
           />
@@ -92,24 +95,24 @@ export default async function ProductDetailPage({
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Inventory batches</CardTitle>
+            <CardTitle>{t('inventoryBatches')}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Qty</TableHead>
-                  <TableHead>Remaining</TableHead>
-                  <TableHead>Landed cost</TableHead>
-                  <TableHead>Shipment</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{t('qty')}</TableHead>
+                  <TableHead>{t('remaining')}</TableHead>
+                  <TableHead>{t('landedCost')}</TableHead>
+                  <TableHead>{t('shipment')}</TableHead>
+                  <TableHead>{t('status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {product.batches.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                      No batches.
+                      {t('noBatches')}
                     </TableCell>
                   </TableRow>
                 )}
@@ -122,8 +125,8 @@ export default async function ProductDetailPage({
                       {b.freightUnitCostUsd > 0 && (
                         <span className="block text-xs text-muted-foreground">
                           {formatUsd(b.goodsUnitCostUsd)} + {formatUsd(b.freightUnitCostUsd)}{' '}
-                          freight
-                          {b.freightIsEstimate && ' (est.)'}
+                          {t('freight')}
+                          {b.freightIsEstimate && ` ${t('estimateSuffix')}`}
                         </span>
                       )}
                     </TableCell>
@@ -151,22 +154,22 @@ export default async function ProductDetailPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Movement history</CardTitle>
+            <CardTitle>{t('movementHistory')}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>When</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead>{t('when')}</TableHead>
+                  <TableHead>{t('type')}</TableHead>
+                  <TableHead className="text-right">{t('qty')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {product.movements.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
-                      No movements.
+                      {t('noMovements')}
                     </TableCell>
                   </TableRow>
                 )}
@@ -176,7 +179,7 @@ export default async function ProductDetailPage({
                       {formatDateTime(m.createdAt)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{m.type}</Badge>
+                      <Badge variant="outline">{tMove(m.type)}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       {m.quantity > 0 ? `+${m.quantity}` : m.quantity}

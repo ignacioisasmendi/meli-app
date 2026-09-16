@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -22,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { PURCHASE_STATUS_OPTIONS } from '@/lib/statuses'
+import { PURCHASE_STATUS_VALUES } from '@/lib/statuses'
 import { registerPurchase } from '@/actions/purchases'
 
 interface ProductOption {
@@ -32,6 +33,9 @@ interface ProductOption {
 }
 
 export function PurchaseFormDialog({ products }: { products: ProductOption[] }) {
+  const t = useTranslations('PurchaseForm')
+  const tStatus = useTranslations('Status')
+  const tCommon = useTranslations('Common')
   const [open, setOpen] = useState(false)
   const [productId, setProductId] = useState('')
   const [status, setStatus] = useState('PURCHASED')
@@ -43,7 +47,7 @@ export function PurchaseFormDialog({ products }: { products: ProductOption[] }) 
     startTransition(async () => {
       const result = await registerPurchase(formData)
       if (result.ok) {
-        toast.success('Purchase registered')
+        toast.success(t('purchaseRegistered'))
         setOpen(false)
         setProductId('')
       } else {
@@ -57,22 +61,22 @@ export function PurchaseFormDialog({ products }: { products: ProductOption[] }) 
       <DialogTrigger asChild>
         <Button disabled={products.length === 0}>
           <Plus className="size-4" />
-          Register purchase
+          {t('registerPurchase')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <form action={onSubmit}>
           <DialogHeader>
-            <DialogTitle>Register purchase</DialogTitle>
-            <DialogDescription>Creates an inventory batch for the product.</DialogDescription>
+            <DialogTitle>{t('registerPurchase')}</DialogTitle>
+            <DialogDescription>{t('createsInventoryBatch')}</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label>Product</Label>
+              <Label>{t('product')}</Label>
               <Select value={productId} onValueChange={setProductId} required>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a product" />
+                  <SelectValue placeholder={t('selectProduct')} />
                 </SelectTrigger>
                 <SelectContent>
                   {products.map((p) => (
@@ -86,11 +90,11 @@ export function PurchaseFormDialog({ products }: { products: ProductOption[] }) 
 
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="quantity">Quantity</Label>
+                <Label htmlFor="quantity">{t('quantity')}</Label>
                 <Input id="quantity" name="quantity" type="number" min={1} required />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="unitCostUsd">Unit cost (USD)</Label>
+                <Label htmlFor="unitCostUsd">{t('unitCostUsd')}</Label>
                 <Input
                   id="unitCostUsd"
                   name="unitCostUsd"
@@ -103,28 +107,28 @@ export function PurchaseFormDialog({ products }: { products: ProductOption[] }) 
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="supplier">Supplier</Label>
+              <Label htmlFor="supplier">{t('supplier')}</Label>
               <Input id="supplier" name="supplier" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Status</Label>
+                <Label>{t('status')}</Label>
                 <Select value={status} onValueChange={setStatus}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PURCHASE_STATUS_OPTIONS.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>
-                        {s.label}
+                    {PURCHASE_STATUS_VALUES.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {tStatus(value)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="purchasedAt">Purchased at</Label>
+                <Label htmlFor="purchasedAt">{t('purchasedAt')}</Label>
                 <Input id="purchasedAt" name="purchasedAt" type="date" />
               </div>
             </div>
@@ -132,7 +136,7 @@ export function PurchaseFormDialog({ products }: { products: ProductOption[] }) 
 
           <DialogFooter>
             <Button type="submit" disabled={isPending || !productId}>
-              {isPending ? 'Saving…' : 'Register'}
+              {isPending ? tCommon('saving') : t('register')}
             </Button>
           </DialogFooter>
         </form>

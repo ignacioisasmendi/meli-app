@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { AlertTriangle, Check, RotateCcw, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { AllocationBasis, ShipmentStatus } from '@prisma/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -26,7 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatArs, formatGrams, formatUsd } from '@/lib/utils'
-import { ALLOCATION_BASIS_HINTS, ALLOCATION_BASIS_OPTIONS } from '@/lib/statuses'
+import { ALLOCATION_BASIS_VALUES } from '@/lib/statuses'
 import { allocateFreight, arsToUsd } from '@/lib/inventory/shipment'
 import { applyEstimate, assignBatches, costShipment, reopenShipment } from '@/actions/shipments'
 
@@ -79,6 +80,8 @@ export function ShipmentCosting({
   usdArsRate: number
   batches: CostingBatch[]
 }) {
+  const t = useTranslations('ShipmentCosting')
+  const tBasis = useTranslations('AllocationBasis')
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
@@ -125,13 +128,9 @@ export function ShipmentCosting({
         toast.error(res.error)
         return
       }
-      toast.success(
-        `Landed costs updated across ${res.summary.productCount} product${res.summary.productCount === 1 ? '' : 's'} — stock is now in the warehouse`
-      )
+      toast.success(t('landedCostsUpdated', { count: res.summary.productCount }))
       if (res.summary.unitsAlreadySold > 0) {
-        toast.warning(
-          `${res.summary.unitsAlreadySold} unit${res.summary.unitsAlreadySold === 1 ? ' was' : 's were'} already sold from this shipment. Those sales keep the profit they were booked with.`
-        )
+        toast.warning(t('unitsAlreadySold', { count: res.summary.unitsAlreadySold }))
       }
       router.refresh()
     })
@@ -141,7 +140,7 @@ export function ShipmentCosting({
     startTransition(async () => {
       const res = await applyEstimate(shipmentId)
       if (res.ok) {
-        toast.success(`Estimate of ${formatUsd(res.summary.totalBillUsd)} spread across the box`)
+        toast.success(t('estimateSpread', { value: formatUsd(res.summary.totalBillUsd) }))
         router.refresh()
       } else {
         toast.error(res.error)
@@ -153,7 +152,7 @@ export function ShipmentCosting({
     startTransition(async () => {
       const res = await assignBatches([batchId], null)
       if (res.ok) {
-        toast.success('Removed from this shipment')
+        toast.success(t('removedFromShipment'))
         router.refresh()
       } else {
         toast.error(res.error)
@@ -165,7 +164,7 @@ export function ShipmentCosting({
     startTransition(async () => {
       const res = await reopenShipment(shipmentId)
       if (res.ok) {
-        toast.success('Shipment reopened — costs stay as they are until you cost it again')
+        toast.success(t('shipmentReopened'))
         router.refresh()
       } else {
         toast.error(res.error)
@@ -178,11 +177,11 @@ export function ShipmentCosting({
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
-        <CardTitle>{costed ? 'Freight bill' : 'Cost this shipment'}</CardTitle>
+        <CardTitle>{costed ? t('freightBill') : t('costThisShipment')}</CardTitle>
         {costed && (
           <Button variant="outline" size="sm" onClick={onReopen} disabled={pending}>
             <RotateCcw className="size-4" />
-            Reopen to edit
+            {t('reopenToEdit')}
           </Button>
         )}
       </CardHeader>
@@ -190,7 +189,7 @@ export function ShipmentCosting({
       <CardContent className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="grid gap-2">
-            <Label htmlFor="freight">Freight (USD)</Label>
+            <Label htmlFor="freight">{t('freightUsd')}</Label>
             <Input
               id="freight"
               type="number"
@@ -203,7 +202,7 @@ export function ShipmentCosting({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="customs">Customs / duties (USD)</Label>
+            <Label htmlFor="customs">{t('customsUsd')}</Label>
             <Input
               id="customs"
               type="number"
@@ -216,7 +215,7 @@ export function ShipmentCosting({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="other">Other (USD)</Label>
+            <Label htmlFor="other">{t('otherUsd')}</Label>
             <Input
               id="other"
               type="number"
@@ -229,7 +228,7 @@ export function ShipmentCosting({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="localArs">Local shipping (ARS)</Label>
+            <Label htmlFor="localArs">{t('localShippingArs')}</Label>
             <Input
               id="localArs"
               type="number"
@@ -243,19 +242,19 @@ export function ShipmentCosting({
             <p className="text-xs text-muted-foreground">
               {num(localArs) > 0 ? (
                 <>
-                  = <span className="font-medium text-foreground">{formatUsd(localUsd)}</span> at{' '}
-                  {formatArs(rate)}/USD
-                  {costed && localShippingRate ? ' (rate when costed)' : ''}
+                  = <span className="font-medium text-foreground">{formatUsd(localUsd)}</span>{' '}
+                  {t('atRate', { rate: formatArs(rate) })}
+                  {costed && localShippingRate ? ` ${t('rateWhenCosted')}` : ''}
                 </>
               ) : (
-                <>Converted at the Saldo buy rate, {formatArs(rate)}/USD.</>
+                <>{t('convertedAtSaldoRate', { rate: formatArs(rate) })}</>
               )}
             </p>
           </div>
         </div>
 
         <div className="grid gap-2 sm:max-w-xs">
-          <Label htmlFor="costing-basis">Split by</Label>
+          <Label htmlFor="costing-basis">{t('splitBy')}</Label>
           <Select
             value={basis}
             onValueChange={(v) => setBasis(v as AllocationBasis)}
@@ -265,24 +264,34 @@ export function ShipmentCosting({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ALLOCATION_BASIS_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
+              {ALLOCATION_BASIS_VALUES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {tBasis(value)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">{ALLOCATION_BASIS_HINTS[basis]}</p>
+          <p className="text-xs text-muted-foreground">{tBasis(`${basis}_hint`)}</p>
         </div>
 
         {allocation.fallbackReason && (
           <div className="flex gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
             <div className="space-y-1 text-sm">
-              <p className="font-medium">{allocation.fallbackReason}</p>
+              <p className="font-medium">
+                {allocation.fallbackReason.code === 'missingWeight'
+                  ? t('fallbackMissingWeight', {
+                      count: allocation.fallbackReason.missingCount,
+                      basis:
+                        allocation.fallbackReason.fallbackBasis === 'VALUE'
+                          ? t('valueWord')
+                          : t('unitsWord'),
+                    })
+                  : t('fallbackNoCost')}
+              </p>
               {missingWeights.length > 0 && (
                 <p className="text-muted-foreground">
-                  Add a unit weight to{' '}
+                  {t('addWeightPrefix')}{' '}
                   {missingWeights.map((b, i) => (
                     <span key={b.id}>
                       {i > 0 && ', '}
@@ -294,7 +303,7 @@ export function ShipmentCosting({
                       </Link>
                     </span>
                   ))}{' '}
-                  to split this bill by weight instead.
+                  {t('addWeightSuffix')}
                 </p>
               )}
             </div>
@@ -305,14 +314,14 @@ export function ShipmentCosting({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Weight</TableHead>
-                <TableHead className="text-right">Share</TableHead>
-                <TableHead className="text-right">Goods/unit</TableHead>
-                <TableHead className="text-right">Freight/unit</TableHead>
-                <TableHead className="text-right">Landed/unit</TableHead>
-                <TableHead className="text-right">Line total</TableHead>
+                <TableHead>{t('product')}</TableHead>
+                <TableHead className="text-right">{t('qty')}</TableHead>
+                <TableHead className="text-right">{t('weight')}</TableHead>
+                <TableHead className="text-right">{t('share')}</TableHead>
+                <TableHead className="text-right">{t('goodsPerUnit')}</TableHead>
+                <TableHead className="text-right">{t('freightPerUnit')}</TableHead>
+                <TableHead className="text-right">{t('landedPerUnit')}</TableHead>
+                <TableHead className="text-right">{t('lineTotal')}</TableHead>
                 {!costed && <TableHead className="w-10" />}
               </TableRow>
             </TableHeader>
@@ -320,7 +329,7 @@ export function ShipmentCosting({
               {batches.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={costed ? 8 : 9} className="py-10 text-center text-muted-foreground">
-                    Nothing in this shipment yet.
+                    {t('nothingInShipment')}
                   </TableCell>
                 </TableRow>
               )}
@@ -373,7 +382,7 @@ export function ShipmentCosting({
                           disabled={pending}
                         >
                           <X className="size-4" />
-                          <span className="sr-only">Remove {b.productName}</span>
+                          <span className="sr-only">{t('removeProduct', { name: b.productName })}</span>
                         </Button>
                       </TableCell>
                     )}
@@ -387,24 +396,24 @@ export function ShipmentCosting({
         <div className="flex flex-wrap items-end justify-between gap-4 border-t pt-4">
           <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-sm sm:grid-cols-4">
             <div>
-              <dt className="text-muted-foreground">Units</dt>
+              <dt className="text-muted-foreground">{t('units')}</dt>
               <dd className="font-medium">{totalUnits}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Goods</dt>
+              <dt className="text-muted-foreground">{t('goods')}</dt>
               <dd className="font-medium">{formatUsd(totalGoods)}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Freight bill</dt>
+              <dt className="text-muted-foreground">{t('freightBill')}</dt>
               <dd className="font-medium">{formatUsd(bill)}</dd>
               {localUsd > 0 && (
                 <dd className="text-xs text-muted-foreground">
-                  incl. {formatUsd(localUsd)} local
+                  {t('inclLocal', { value: formatUsd(localUsd) })}
                 </dd>
               )}
             </div>
             <div>
-              <dt className="text-muted-foreground">Landed total</dt>
+              <dt className="text-muted-foreground">{t('landedTotal')}</dt>
               <dd className="font-medium">{formatUsd(totalGoods + bill - allocation.residualUsd)}</dd>
             </div>
           </dl>
@@ -413,12 +422,12 @@ export function ShipmentCosting({
             <div className="flex gap-2">
               {estimatedUsd > 0 && (
                 <Button variant="outline" onClick={onEstimate} disabled={pending}>
-                  Apply {formatUsd(estimatedUsd)} estimate
+                  {t('applyEstimate', { value: formatUsd(estimatedUsd) })}
                 </Button>
               )}
               <Button onClick={onCost} disabled={pending || bill <= 0 || batches.length === 0}>
                 <Check className="size-4" />
-                {pending ? 'Applying…' : 'Apply & receive into warehouse'}
+                {pending ? t('applying') : t('applyAndReceive')}
               </Button>
             </div>
           )}
@@ -426,9 +435,10 @@ export function ShipmentCosting({
 
         {allocation.residualUsd !== 0 && bill > 0 && (
           <p className="text-xs text-muted-foreground">
-            {formatUsd(Math.abs(allocation.residualUsd))} of the bill{' '}
-            {allocation.residualUsd > 0 ? 'is left over' : 'is over-allocated'} because the split
-            doesn’t divide evenly into whole cents per unit.
+            {t('residualNote', {
+              value: formatUsd(Math.abs(allocation.residualUsd)),
+              direction: allocation.residualUsd > 0 ? t('leftOver') : t('overAllocated'),
+            })}
           </p>
         )}
       </CardContent>

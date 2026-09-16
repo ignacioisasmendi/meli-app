@@ -74,36 +74,39 @@ export function normalizeOrder(order: ParsedOrder): ParsedOrder {
   }
 }
 
+/** Structured reconciliation warning — translated at the render site. */
+export type OrderWarning =
+  | { code: 'noItems' }
+  | { code: 'subtotalMismatch'; lineSum: number; itemsSubtotal: number }
+  | { code: 'grandTotalMismatch'; computed: number; grandTotal: number }
+  | { code: 'unexpectedCurrency'; currency: string }
+
 /**
  * Cross-checks the extracted lines against the totals printed on the
  * screenshot. Anything returned here is worth a human's eyes before importing.
  */
-export function reconcileOrder(order: ParsedOrder): string[] {
-  const warnings: string[] = []
+export function reconcileOrder(order: ParsedOrder): OrderWarning[] {
+  const warnings: OrderWarning[] = []
 
   if (order.items.length === 0) {
-    warnings.push('No items were found on that screenshot')
+    warnings.push({ code: 'noItems' })
     return warnings
   }
 
   const lineSum = round2(order.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0))
   if (order.itemsSubtotal != null && Math.abs(lineSum - order.itemsSubtotal) > 0.02) {
-    warnings.push(
-      `Items add up to $${lineSum.toFixed(2)} but the order subtotal reads $${order.itemsSubtotal.toFixed(2)} — check the quantities`
-    )
+    warnings.push({ code: 'subtotalMismatch', lineSum, itemsSubtotal: order.itemsSubtotal })
   }
 
   if (order.grandTotal != null) {
     const computed = round2(lineSum + (order.tax ?? 0) + (order.shipping ?? 0))
     if (Math.abs(computed - order.grandTotal) > 0.02) {
-      warnings.push(
-        `Items + tax + shipping is $${computed.toFixed(2)} but the grand total reads $${order.grandTotal.toFixed(2)}`
-      )
+      warnings.push({ code: 'grandTotalMismatch', computed, grandTotal: order.grandTotal })
     }
   }
 
   if (order.currency !== 'USD') {
-    warnings.push(`Amounts look like ${order.currency}, but purchases are recorded in USD`)
+    warnings.push({ code: 'unexpectedCurrency', currency: order.currency })
   }
 
   return warnings
@@ -163,19 +166,39 @@ const pastedOrderSchema = z.object({
     .min(1, 'The JSON has no "items"'),
 })
 
+/** Structured paste error — translated at the render site. */
+export type PasteError =
+  | { code: 'noJsonFound' }
+  | { code: 'invalidJson' }
+  | { code: 'noItems' }
+  | { code: 'itemNeedsName'; item: number }
+  | { code: 'itemNeedsPrice'; item: number }
+  | { code: 'itemMissingField'; item: number; field: string }
+  | { code: 'itemIssue'; item: number; message: string }
+  | { code: 'issue'; message: string }
+
 /** Turns a Zod path into something that points at a row of the pasted order. */
-function describeIssue(issue: z.ZodIssue): string {
+function describeIssue(issue: z.ZodIssue): PasteError {
   const [head, index, field] = issue.path
   if (head === 'items' && typeof index === 'number') {
-    const item = `Item ${index + 1}`
+    const item = index + 1
+    if (field === 'name' && issue.message.includes('needs a "name"')) {
+      return { code: 'itemNeedsName', item }
+    }
+    if (field === 'unitPrice' && issue.message.includes('needs a "unitPrice"')) {
+      return { code: 'itemNeedsPrice', item }
+    }
     return issue.message === 'Required'
-      ? `${item} is missing "${String(field)}"`
-      : `${item}: ${issue.message}`
+      ? { code: 'itemMissingField', item, field: String(field) }
+      : { code: 'itemIssue', item, message: issue.message }
   }
-  return issue.message
+  if (issue.path[0] === 'items' && issue.message.includes('no "items"')) {
+    return { code: 'noItems' }
+  }
+  return { code: 'issue', message: issue.message }
 }
 
-export type PasteResult = { ok: true; order: ParsedOrder } | { ok: false; error: string }
+export type PasteResult = { ok: true; order: ParsedOrder } | { ok: false; error: PasteError }
 
 /**
  * Reads the JSON block out of whatever was pasted — claude.ai tends to wrap it
@@ -189,14 +212,14 @@ export function parsePastedOrder(text: string): PasteResult {
   const start = body.indexOf('{')
   const end = body.lastIndexOf('}')
   if (start === -1 || end <= start) {
-    return { ok: false, error: 'No JSON found — paste the whole block, including the { and }' }
+    return { ok: false, error: { code: 'noJsonFound' } }
   }
 
   let raw: unknown
   try {
     raw = JSON.parse(body.slice(start, end + 1))
   } catch {
-    return { ok: false, error: "That isn't valid JSON — copy Claude's reply again, unedited" }
+    return { ok: false, error: { code: 'invalidJson' } }
   }
 
   const parsed = pastedOrderSchema.safeParse(raw)

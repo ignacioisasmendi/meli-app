@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import { Plus, Store, AlertTriangle } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
@@ -11,6 +12,7 @@ import { formatDateTime } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
 export default async function AccountsPage() {
+  const t = await getTranslations('Accounts')
   const accounts = await prisma.mercadoLibreAccount.findMany({
     where: { isActive: true },
     orderBy: { nickname: 'asc' },
@@ -29,13 +31,13 @@ export default async function AccountsPage() {
   return (
     <div>
       <PageHeader
-        title="Mercado Libre Accounts"
-        description="Connect and manage your seller accounts."
+        title={t('title')}
+        description={t('description')}
         action={
           <Button asChild>
             <a href="/api/mercadolibre/connect">
               <Plus className="size-4" />
-              Connect account
+              {t('connectAccount')}
             </a>
           </Button>
         }
@@ -45,9 +47,9 @@ export default async function AccountsPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Store className="size-10 text-muted-foreground" />
-            <p className="text-muted-foreground">No accounts connected yet.</p>
+            <p className="text-muted-foreground">{t('noAccountsYet')}</p>
             <Button asChild>
-              <a href="/api/mercadolibre/connect">Connect your first account</a>
+              <a href="/api/mercadolibre/connect">{t('connectFirstAccount')}</a>
             </Button>
           </CardContent>
         </Card>
@@ -67,15 +69,15 @@ export default async function AccountsPage() {
                 <CardContent className="space-y-4">
                   <div className="flex gap-6 text-sm">
                     <div>
-                      <p className="text-muted-foreground">Listings</p>
+                      <p className="text-muted-foreground">{t('listings')}</p>
                       <p className="text-lg font-semibold">{a._count.listings}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Sales</p>
+                      <p className="text-muted-foreground">{t('sales')}</p>
                       <p className="text-lg font-semibold">{a._count.sales}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Token expires</p>
+                      <p className="text-muted-foreground">{t('tokenExpires')}</p>
                       <p className="text-sm">{formatDateTime(a.expiresAt)}</p>
                     </div>
                   </div>
@@ -83,9 +85,9 @@ export default async function AccountsPage() {
                   {unmappedCount > 0 && (
                     <div className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
                       <AlertTriangle className="size-4" />
-                      {unmappedCount} unmapped listing{unmappedCount === 1 ? '' : 's'} —{' '}
+                      {t('unmappedListings', { count: unmappedCount })} —{' '}
                       <Link href={`/accounts/${a.id}/listings`} className="font-medium underline">
-                        map to products
+                        {t('mapToProducts')}
                       </Link>
                     </div>
                   )}

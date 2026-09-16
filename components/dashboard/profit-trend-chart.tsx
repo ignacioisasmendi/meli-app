@@ -1,6 +1,7 @@
 'use client'
 
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import { useTranslations } from 'next-intl'
 import {
   ChartContainer,
   ChartTooltip,
@@ -8,11 +9,12 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart'
 
-const config = {
-  profitUsd: { label: 'Profit (USD)', color: 'var(--chart-1)' },
-} satisfies ChartConfig
-
 export function ProfitTrendChart({ data }: { data: { date: string; profitUsd: number }[] }) {
+  const t = useTranslations('Dashboard')
+  const config = {
+    profitUsd: { label: t('profitUsd'), color: 'var(--chart-1)' },
+  } satisfies ChartConfig
+
   return (
     <ChartContainer config={config} className="h-[240px] w-full">
       <AreaChart data={data} margin={{ left: 4, right: 8, top: 8 }}>

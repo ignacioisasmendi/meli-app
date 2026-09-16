@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -22,7 +23,7 @@ import { ScreenshotDropzone } from '@/components/purchases/screenshot-dropzone'
 import { formatUsd } from '@/lib/utils'
 import { allocateOrder } from '@/lib/inventory/landed'
 import { matchProduct, suggestSku } from '@/lib/imports/match-product'
-import type { ParsedOrder } from '@/lib/imports/amazon-order'
+import type { OrderWarning, ParsedOrder } from '@/lib/imports/amazon-order'
 import { importPurchases, type ImportPayload } from '@/actions/imports'
 
 interface ProductOption {
@@ -73,6 +74,7 @@ export function PurchaseImport({
   /** The API import path only works when ANTHROPIC_API_KEY is configured. */
   canUploadScreenshot: boolean
 }) {
+  const t = useTranslations('PurchaseImport')
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
@@ -83,7 +85,7 @@ export function PurchaseImport({
   const [shipping, setShipping] = useState('')
   const [shipmentId, setShipmentId] = useState(NO_SHIPMENT)
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()])
-  const [scanned, setScanned] = useState<{ order: ParsedOrder; warnings: string[] } | null>(null)
+  const [scanned, setScanned] = useState<{ order: ParsedOrder; warnings: OrderWarning[] } | null>(null)
 
   function patch(i: number, change: Partial<DraftLine>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...change } : l)))
@@ -94,9 +96,9 @@ export function PurchaseImport({
    * product are mapped onto it; the rest become new products with a suggested
    * SKU. Everything stays editable — nothing is saved until "Import".
    */
-  function applyParsed(order: ParsedOrder, orderWarnings: string[]) {
+  function applyParsed(order: ParsedOrder, orderWarnings: OrderWarning[]) {
     if (order.items.length === 0) {
-      toast.error('No items were found in that order')
+      toast.error(t('noItemsFound'))
       return
     }
 
@@ -135,8 +137,8 @@ export function PurchaseImport({
     setLines(scannedLines)
     const matched = scannedLines.filter((l) => l.mode === 'existing').length
     toast.success(
-      `Read ${scannedLines.length} item${scannedLines.length === 1 ? '' : 's'}` +
-        (matched > 0 ? ` — ${matched} matched to existing products` : '')
+      t('readItems', { count: scannedLines.length }) +
+        (matched > 0 ? ` — ${t('matchedExisting', { count: matched })}` : '')
     )
   }
 
@@ -168,7 +170,7 @@ export function PurchaseImport({
     startTransition(async () => {
       const res = await importPurchases(payload)
       if (res.ok) {
-        toast.success('Purchases imported')
+        toast.success(t('purchasesImported'))
         router.push(shipmentId === NO_SHIPMENT ? '/purchases' : `/shipments/${shipmentId}`)
       } else {
         toast.error(res.error)
@@ -180,14 +182,14 @@ export function PurchaseImport({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Fill from an Amazon screenshot</CardTitle>
+          <CardTitle>{t('fillFromScreenshot')}</CardTitle>
         </CardHeader>
         <CardContent>
           {canUploadScreenshot ? (
             <Tabs defaultValue="paste">
               <TabsList className="mb-4">
-                <TabsTrigger value="paste">Paste from Claude</TabsTrigger>
-                <TabsTrigger value="upload">Upload screenshot</TabsTrigger>
+                <TabsTrigger value="paste">{t('pasteFromClaude')}</TabsTrigger>
+                <TabsTrigger value="upload">{t('uploadScreenshot')}</TabsTrigger>
               </TabsList>
               <TabsContent value="paste">
                 <PasteOrderImport onParsed={applyParsed} disabled={pending} />
@@ -212,15 +214,15 @@ export function PurchaseImport({
 
       <Card>
         <CardHeader>
-          <CardTitle>Order details</CardTitle>
+          <CardTitle>{t('orderDetails')}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="grid gap-2">
-            <Label htmlFor="supplier">Supplier</Label>
+            <Label htmlFor="supplier">{t('supplier')}</Label>
             <Input id="supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="orderNumber">Order number</Label>
+            <Label htmlFor="orderNumber">{t('orderNumber')}</Label>
             <Input
               id="orderNumber"
               value={orderNumber}
@@ -229,7 +231,7 @@ export function PurchaseImport({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="purchasedAt">Purchase date</Label>
+            <Label htmlFor="purchasedAt">{t('purchaseDate')}</Label>
             <Input
               id="purchasedAt"
               type="date"
@@ -239,7 +241,7 @@ export function PurchaseImport({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="grid gap-2">
-              <Label htmlFor="tax">Tax (USD)</Label>
+              <Label htmlFor="tax">{t('taxUsd')}</Label>
               <Input
                 id="tax"
                 type="number"
@@ -251,7 +253,7 @@ export function PurchaseImport({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="shipping">Shipping (USD)</Label>
+              <Label htmlFor="shipping">{t('shippingUsd')}</Label>
               <Input
                 id="shipping"
                 type="number"
@@ -265,13 +267,13 @@ export function PurchaseImport({
           </div>
 
           <div className="grid gap-2 sm:col-span-2 lg:col-span-4">
-            <Label htmlFor="shipment">Shipment</Label>
+            <Label htmlFor="shipment">{t('shipment')}</Label>
             <Select value={shipmentId} onValueChange={setShipmentId}>
               <SelectTrigger id="shipment" className="lg:w-1/2">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NO_SHIPMENT}>Not in a shipment yet</SelectItem>
+                <SelectItem value={NO_SHIPMENT}>{t('notInShipmentYet')}</SelectItem>
                 {shipments.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.code}
@@ -280,44 +282,41 @@ export function PurchaseImport({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
-              The tax and shipping above are Amazon’s. Import freight is added later, when
-              the box lands and you enter the courier bill on the shipment.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('taxShippingHint')}</p>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Items</CardTitle>
+          <CardTitle>{t('items')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {lines.map((line, i) => (
             <div key={i} className="rounded-lg border p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <span className="text-sm font-medium text-muted-foreground">
-                  Item {i + 1}
+                  {t('itemNumber', { n: i + 1 })}
                   {num(line.unitPrice) > 0 && (
                     <span className="ml-2 text-foreground">
                       {formatUsd(allocated[i].goodsUsd)}
                       {allocated[i].taxUsd > 0 && (
                         <span className="text-muted-foreground">
                           {' '}
-                          + {formatUsd(allocated[i].taxUsd)} tax
+                          + {t('plusTax', { value: formatUsd(allocated[i].taxUsd) })}
                         </span>
                       )}
                       {allocated[i].shippingUsd > 0 && (
                         <span className="text-muted-foreground">
                           {' '}
-                          + {formatUsd(allocated[i].shippingUsd)} shipping
+                          + {t('plusShipping', { value: formatUsd(allocated[i].shippingUsd) })}
                         </span>
                       )}
                       {' = '}
                       {formatUsd(allocated[i].totalUsd)}
                       <span className="text-muted-foreground">
                         {' '}
-                        ({formatUsd(allocated[i].unitCostUsd)}/unit)
+                        ({t('perUnit', { value: formatUsd(allocated[i].unitCostUsd) })})
                       </span>
                     </span>
                   )}
@@ -336,7 +335,7 @@ export function PurchaseImport({
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
-                  <Label>Map to</Label>
+                  <Label>{t('mapTo')}</Label>
                   <Select
                     value={line.mode === 'existing' ? line.productId : '__new__'}
                     onValueChange={(v) =>
@@ -350,10 +349,10 @@ export function PurchaseImport({
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select" />
+                      <SelectValue placeholder={t('select')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__new__">+ Create new product</SelectItem>
+                      <SelectItem value="__new__">{t('createNewProduct')}</SelectItem>
                       {products.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
                           {p.name}
@@ -365,27 +364,27 @@ export function PurchaseImport({
 
                 {line.mode === 'new' && (
                   <div className="grid gap-2">
-                    <Label>New SKU</Label>
+                    <Label>{t('newSku')}</Label>
                     <Input
                       value={line.sku}
                       onChange={(e) => patch(i, { sku: e.target.value })}
-                      placeholder="Unique SKU"
+                      placeholder={t('uniqueSku')}
                     />
                   </div>
                 )}
 
                 <div className="grid gap-2 md:col-span-2">
-                  <Label>Product name</Label>
+                  <Label>{t('productName')}</Label>
                   <Input
                     value={line.name}
                     onChange={(e) => patch(i, { name: e.target.value })}
-                    placeholder="e.g. DJI Mic Mini (1 TX + 1 RX)"
+                    placeholder={t('productNamePlaceholder')}
                     disabled={line.mode === 'existing'}
                   />
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>Quantity</Label>
+                  <Label>{t('quantity')}</Label>
                   <Input
                     type="number"
                     min={1}
@@ -395,7 +394,7 @@ export function PurchaseImport({
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>Unit price (USD, before tax)</Label>
+                  <Label>{t('unitPriceBeforeTax')}</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -411,18 +410,16 @@ export function PurchaseImport({
 
           <Button type="button" variant="outline" onClick={() => setLines([...lines, emptyLine()])}>
             <Plus className="size-4" />
-            Add item
+            {t('addItem')}
           </Button>
 
           <div className="flex items-center justify-between border-t pt-4">
             <span className="text-sm text-muted-foreground">
-              Order total (goods + tax + shipping):{' '}
+              {t('orderTotalLabel')}{' '}
               <span className="font-medium text-foreground">{formatUsd(grandTotal)}</span>
             </span>
             <Button onClick={onImport} disabled={pending}>
-              {pending
-                ? 'Importing…'
-                : `Import ${lines.length} purchase${lines.length === 1 ? '' : 's'}`}
+              {pending ? t('importing') : t('importPurchases', { count: lines.length })}
             </Button>
           </div>
         </CardContent>

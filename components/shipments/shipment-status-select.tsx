@@ -2,6 +2,7 @@
 
 import { useTransition } from 'react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { ShipmentStatus } from '@prisma/client'
 import {
   Select,
@@ -10,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { SHIPMENT_STATUS_OPTIONS } from '@/lib/statuses'
+import { SHIPMENT_STATUS_VALUES } from '@/lib/statuses'
 import { updateShipmentStatus } from '@/actions/shipments'
 
 /**
@@ -24,12 +25,14 @@ export function ShipmentStatusSelect({
   shipmentId: string
   status: ShipmentStatus
 }) {
+  const t = useTranslations('Status')
+  const tShipment = useTranslations('Shipments')
   const [isPending, startTransition] = useTransition()
 
   function onChange(value: string) {
     startTransition(async () => {
       const result = await updateShipmentStatus(shipmentId, value as ShipmentStatus)
-      if (result.ok) toast.success('Shipment updated')
+      if (result.ok) toast.success(tShipment('shipmentUpdated'))
       else toast.error(result.error)
     })
   }
@@ -44,9 +47,9 @@ export function ShipmentStatusSelect({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {SHIPMENT_STATUS_OPTIONS.map((s) => (
-          <SelectItem key={s.value} value={s.value}>
-            {s.label}
+        {SHIPMENT_STATUS_VALUES.map((value) => (
+          <SelectItem key={value} value={value}>
+            {t(value)}
           </SelectItem>
         ))}
       </SelectContent>

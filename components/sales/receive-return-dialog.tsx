@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { PackageCheck } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -31,6 +32,8 @@ export function ReceiveReturnDialog({
   productName: string
   awaitingQuantity: number
 }) {
+  const t = useTranslations('ReceiveReturn')
+  const tCommon = useTranslations('Common')
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
@@ -40,7 +43,7 @@ export function ReceiveReturnDialog({
     startTransition(async () => {
       const result = await confirmReturnReceived(formData)
       if (result.ok) {
-        toast.success(resellable ? 'Return restocked' : 'Return written off')
+        toast.success(resellable ? t('returnRestocked') : t('returnWrittenOff'))
         setOpen(false)
       } else {
         toast.error(result.error)
@@ -53,21 +56,20 @@ export function ReceiveReturnDialog({
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <PackageCheck className="mr-2 size-4" />
-          Receive
+          {t('receive')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <form>
           <DialogHeader>
-            <DialogTitle>Receive return</DialogTitle>
+            <DialogTitle>{t('receiveReturn')}</DialogTitle>
             <DialogDescription>
-              {productName} — {awaitingQuantity} unit
-              {awaitingQuantity === 1 ? '' : 's'} awaiting receipt.
+              {t('awaitingReceipt', { productName, count: awaitingQuantity })}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="quantity">Units received</Label>
+              <Label htmlFor="quantity">{t('unitsReceived')}</Label>
               <Input
                 id="quantity"
                 name="quantity"
@@ -79,14 +81,10 @@ export function ReceiveReturnDialog({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="note">Note</Label>
-              <Input id="note" name="note" placeholder="Condition (optional)" />
+              <Label htmlFor="note">{t('note')}</Label>
+              <Input id="note" name="note" placeholder={t('conditionPlaceholder')} />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Restocking returns the units to their original batch at the cost they
-              sold at. Writing off keeps them out of stock and books the cost as a
-              loss.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('restockingExplainer')}</p>
           </div>
           <DialogFooter className="gap-2">
             <Button
@@ -95,14 +93,14 @@ export function ReceiveReturnDialog({
               disabled={isPending}
               formAction={(formData) => submit(formData, false)}
             >
-              Not resellable
+              {t('notResellable')}
             </Button>
             <Button
               type="submit"
               disabled={isPending}
               formAction={(formData) => submit(formData, true)}
             >
-              {isPending ? 'Saving…' : 'Restock'}
+              {isPending ? tCommon('saving') : t('restock')}
             </Button>
           </DialogFooter>
         </form>
