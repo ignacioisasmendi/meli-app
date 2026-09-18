@@ -4,6 +4,7 @@ import { Import } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { ArrivalDialog } from '@/components/purchases/arrival-dialog'
+import { EstimatedArrival } from '@/components/purchases/estimated-arrival'
 import { PurchaseFormDialog } from '@/components/purchases/purchase-form-dialog'
 import { PurchaseStatusSelect } from '@/components/purchases/purchase-status-select'
 import { Button } from '@/components/ui/button'
@@ -84,6 +85,18 @@ export default async function PurchasesPage() {
                     arrivedAt={line.arrivedAt ? line.arrivedAt.toISOString().slice(0, 10) : null}
                     arrivedAtLabel={line.arrivedAt ? formatDate(line.arrivedAt) : null}
                   />
+                  {!line.arrivedAt && (
+                    <EstimatedArrival
+                      purchaseId={line.id}
+                      estimatedArrivalAt={
+                        line.estimatedArrivalAt ? line.estimatedArrivalAt.toISOString().slice(0, 10) : null
+                      }
+                      estimatedArrivalLabel={
+                        line.estimatedArrivalAt ? formatDate(line.estimatedArrivalAt) : null
+                      }
+                      inOrder={!!line.orderId}
+                    />
+                  )}
                 </TableCell>
                 <TableCell>
                   {line.order ? (

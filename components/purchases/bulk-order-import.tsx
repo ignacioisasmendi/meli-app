@@ -186,6 +186,7 @@ export function BulkOrderImport({
       supplier: d.supplier,
       purchasedAt: d.purchasedAt ?? undefined,
       arrivedAt: d.arrivedAt ?? undefined,
+      estimatedArrivalAt: d.estimatedArrivalAt ?? undefined,
       tax: d.tax,
       shipping: d.shipping,
       shipmentId: shipmentId === NO_SHIPMENT ? undefined : shipmentId,
@@ -319,6 +320,9 @@ export function BulkOrderImport({
                     <p className="text-xs text-muted-foreground">
                       {order.purchasedAt ?? t('today')}
                       {order.arrivedAt && ` · ${t('arrived', { date: order.arrivedAt })}`}
+                      {!order.arrivedAt &&
+                        order.estimatedArrivalAt &&
+                        ` · ${t('estimated', { date: order.estimatedArrivalAt })}`}
                       {' · '}
                       {t('taxShipping', {
                         tax: formatUsd(order.tax),

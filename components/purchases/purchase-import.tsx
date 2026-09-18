@@ -82,6 +82,7 @@ export function PurchaseImport({
   const [supplier, setSupplier] = useState('Amazon')
   const [purchasedAt, setPurchasedAt] = useState('')
   const [arrivedAt, setArrivedAt] = useState('')
+  const [estimatedArrivalAt, setEstimatedArrivalAt] = useState('')
   const [tax, setTax] = useState('')
   const [shipping, setShipping] = useState('')
   const [shipmentId, setShipmentId] = useState(NO_SHIPMENT)
@@ -157,6 +158,7 @@ export function PurchaseImport({
       supplier: supplier.trim(),
       purchasedAt: purchasedAt || undefined,
       arrivedAt: arrivedAt || undefined,
+      estimatedArrivalAt: estimatedArrivalAt || undefined,
       tax: num(tax),
       shipping: num(shipping),
       shipmentId: shipmentId === NO_SHIPMENT ? undefined : shipmentId,
@@ -248,6 +250,15 @@ export function PurchaseImport({
               type="date"
               value={arrivedAt}
               onChange={(e) => setArrivedAt(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="estimatedArrivalAt">{t('estimatedArrival')}</Label>
+            <Input
+              id="estimatedArrivalAt"
+              type="date"
+              value={estimatedArrivalAt}
+              onChange={(e) => setEstimatedArrivalAt(e.target.value)}
             />
           </div>
           <div className="grid grid-cols-2 gap-2">

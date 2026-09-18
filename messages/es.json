@@ -304,7 +304,8 @@
     "importPurchases": "{count, plural, one {Importar # compra} other {Importar # compras}}",
     "arrivalDate": "Llegada al courier",
     "perUnitWithTax": "{value} c/u con imp.",
-    "bulkImport": "Importación masiva (JSON)"
+    "bulkImport": "Importación masiva (JSON)",
+    "estimatedArrival": "Llegada estimada"
   },
   "PurchaseForm": {
     "registerPurchase": "Registrar compra",
@@ -671,7 +672,7 @@
     "description": "Pegá un array JSON de órdenes del proveedor e importalas todas juntas. El impuesto y el envío de cada orden se reparten entre sus ítems, igual que en la importación individual.",
     "pasteTitle": "JSON de órdenes",
     "formatHint": "Un array de órdenes, cada una con sus ítems:",
-    "fieldsHint": "Obligatorios: items[].name, items[].unitPrice (USD por unidad, antes de impuestos). Opcionales: orderNumber, supplier (por defecto Amazon), purchasedAt / arrivedAt (AAAA-MM-DD), tax, shipping, items[].quantity (por defecto 1), items[].sku (se vincula a ese producto, o es el SKU del producto nuevo). Hasta 100 órdenes.",
+    "fieldsHint": "Obligatorios: items[].name, items[].unitPrice (USD por unidad, antes de impuestos). Opcionales: orderNumber, supplier (por defecto Amazon), purchasedAt / arrivedAt / estimatedArrivalAt (AAAA-MM-DD), tax, shipping, items[].quantity (por defecto 1), items[].sku (se vincula a ese producto, o es el SKU del producto nuevo). Hasta 100 órdenes.",
     "copyExample": "Copiar ejemplo",
     "copied": "Copiado",
     "loadFile": "Cargar archivo .json",
@@ -697,6 +698,17 @@
     "removeDuplicates": "Quitá las órdenes ya importadas",
     "importing": "Importando…",
     "importOrders": "{count, plural, one {Importar # orden} other {Importar # órdenes}}",
-    "imported": "{count, plural, one {# orden importada} other {# órdenes importadas}}"
+    "imported": "{count, plural, one {# orden importada} other {# órdenes importadas}}",
+    "estimated": "estimada {date}"
+  },
+  "EstimatedArrival": {
+    "label": "Estimada {date}",
+    "add": "Agregar estimada",
+    "title": "Llegada estimada (courier)",
+    "hint": "Es solo un estimativo: no cambia el estado ni el stock. Registrá la llegada real cuando llegue.",
+    "wholeOrder": "Aplicar a todas las líneas pendientes de la orden",
+    "clear": "Borrar",
+    "saved": "Llegada estimada guardada",
+    "cleared": "Llegada estimada borrada"
   }
 }

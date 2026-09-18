@@ -109,6 +109,8 @@ export async function splitPurchase(
       status: purchase.status,
       purchasedAt: purchase.purchasedAt,
       arrivedAt: remainder.arrivedAt ?? null,
+      // The units still in transit keep the same expectation.
+      estimatedArrivalAt: purchase.estimatedArrivalAt,
     },
   })
   await tx.purchase.update({

@@ -248,6 +248,10 @@ model Purchase {
   /// together, so a partial arrival splits the line (see `registerArrival`):
   /// every row carries a single date, never "some of it on each".
   arrivedAt    DateTime?
+  /// When the goods are EXPECTED at the courier — a guess entered at import
+  /// and revised by hand. Purely informational: unlike `arrivedAt` it never
+  /// moves status or stock.
+  estimatedArrivalAt DateTime?
   createdAt    DateTime       @default(now())
 
   batches InventoryBatch[]

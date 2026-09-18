@@ -304,7 +304,8 @@
     "importPurchases": "{count, plural, one {Import # purchase} other {Import # purchases}}",
     "arrivalDate": "Arrived at courier",
     "perUnitWithTax": "{value}/unit with tax",
-    "bulkImport": "Bulk import (JSON)"
+    "bulkImport": "Bulk import (JSON)",
+    "estimatedArrival": "Estimated arrival"
   },
   "PurchaseForm": {
     "registerPurchase": "Register purchase",
@@ -671,7 +672,7 @@
     "description": "Paste a JSON array of supplier orders and import them all at once. Each order's tax + shipping is split across its items, exactly like the single import.",
     "pasteTitle": "Orders JSON",
     "formatHint": "An array of orders, each with its items:",
-    "fieldsHint": "Required: items[].name, items[].unitPrice (USD per unit, before tax). Optional: orderNumber, supplier (default Amazon), purchasedAt / arrivedAt (YYYY-MM-DD), tax, shipping, items[].quantity (default 1), items[].sku (maps onto that product, or becomes the new product's SKU). Up to 100 orders.",
+    "fieldsHint": "Required: items[].name, items[].unitPrice (USD per unit, before tax). Optional: orderNumber, supplier (default Amazon), purchasedAt / arrivedAt / estimatedArrivalAt (YYYY-MM-DD), tax, shipping, items[].quantity (default 1), items[].sku (maps onto that product, or becomes the new product's SKU). Up to 100 orders.",
     "copyExample": "Copy example",
     "copied": "Copied",
     "loadFile": "Load .json file",
@@ -697,6 +698,17 @@
     "removeDuplicates": "Remove the orders already imported",
     "importing": "Importing…",
     "importOrders": "{count, plural, one {Import # order} other {Import # orders}}",
-    "imported": "{count, plural, one {# order imported} other {# orders imported}}"
+    "imported": "{count, plural, one {# order imported} other {# orders imported}}",
+    "estimated": "ETA {date}"
+  },
+  "EstimatedArrival": {
+    "label": "ETA {date}",
+    "add": "Add ETA",
+    "title": "Estimated arrival (courier)",
+    "hint": "An estimate only — it doesn't change status or stock. Register the real arrival when it lands.",
+    "wholeOrder": "Apply to every pending line of this order",
+    "clear": "Clear",
+    "saved": "Estimated arrival saved",
+    "cleared": "Estimated arrival cleared"
   }
 }

@@ -160,6 +160,47 @@ export async function updateOrderStatus(
   return { ok: true }
 }
 
+const estimatedArrivalSchema = z.object({
+  purchaseId: z.string().min(1),
+  /** `yyyy-MM-dd`, or empty to clear the estimate. */
+  estimatedArrivalAt: z.string(),
+  /** Also move every other not-yet-arrived line of the same supplier order. */
+  wholeOrder: z.boolean().default(false),
+})
+
+/**
+ * Sets (or clears) when a purchase is expected at the courier. A revisable
+ * guess, so it only touches the date: status, batches and stock are left to
+ * `registerArrival` once the goods actually land.
+ */
+export async function updateEstimatedArrival(
+  input: z.input<typeof estimatedArrivalSchema>
+): Promise<ActionResult> {
+  await requireUser()
+  const parsed = estimatedArrivalSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+  const { purchaseId, wholeOrder } = parsed.data
+  const date = parsed.data.estimatedArrivalAt ? new Date(parsed.data.estimatedArrivalAt) : null
+  if (date && Number.isNaN(date.getTime())) return { ok: false, error: 'Invalid date' }
+
+  const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } })
+  if (!purchase) return { ok: false, error: 'Purchase not found' }
+
+  await prisma.purchase.updateMany({
+    where:
+      wholeOrder && purchase.orderId
+        ? { orderId: purchase.orderId, arrivedAt: null }
+        : { id: purchase.id },
+    data: { estimatedArrivalAt: date },
+  })
+
+  revalidatePath('/purchases')
+  if (purchase.orderId) revalidatePath(`/purchases/orders/${purchase.orderId}`)
+  return { ok: true }
+}
+
 const arrivalSchema = z.object({
   purchaseId: z.string().min(1),
   arrivedAt: z.string().min(1, 'Arrival date is required'),

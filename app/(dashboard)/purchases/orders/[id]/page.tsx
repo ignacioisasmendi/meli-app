@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server'
 import { ArrowLeft } from 'lucide-react'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { ArrivalDialog } from '@/components/purchases/arrival-dialog'
+import { EstimatedArrival } from '@/components/purchases/estimated-arrival'
 import { OrderStatusSelect } from '@/components/purchases/order-status-select'
 import { PurchaseStatusSelect } from '@/components/purchases/purchase-status-select'
 import { Button } from '@/components/ui/button'
@@ -133,6 +134,18 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                       arrivedAt={line.arrivedAt ? line.arrivedAt.toISOString().slice(0, 10) : null}
                       arrivedAtLabel={line.arrivedAt ? formatDate(line.arrivedAt) : null}
                     />
+                    {!line.arrivedAt && (
+                      <EstimatedArrival
+                        purchaseId={line.id}
+                        estimatedArrivalAt={
+                          line.estimatedArrivalAt ? line.estimatedArrivalAt.toISOString().slice(0, 10) : null
+                        }
+                        estimatedArrivalLabel={
+                          line.estimatedArrivalAt ? formatDate(line.estimatedArrivalAt) : null
+                        }
+                        inOrder={!!line.orderId}
+                      />
+                    )}
                   </TableCell>
                   <TableCell className="text-right">{line.quantity}</TableCell>
                   <TableCell className="text-right">

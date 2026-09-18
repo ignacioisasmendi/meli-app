@@ -31,6 +31,8 @@ const importSchema = z.object({
   purchasedAt: z.string().optional(),
   /** When the whole order arrived, if it already did. Partial arrivals are registered per line afterwards. */
   arrivedAt: z.string().optional(),
+  /** Best guess of when it reaches the courier. Informational only — editable later. */
+  estimatedArrivalAt: z.string().optional(),
   tax: z.coerce.number().min(0).default(0),
   shipping: z.coerce.number().min(0).default(0),
   /** Box these lines travel in. Its freight is applied later, on arrival. */
@@ -49,6 +51,7 @@ interface PreparedOrder {
   supplier: string
   purchasedAt: Date
   arrivedAt: Date | null
+  estimatedArrivalAt: Date | null
   shipmentId: string | null
   batchStatus: BatchStatus
 }
@@ -62,6 +65,10 @@ async function prepareOrder(data: ImportData): Promise<PreparedOrder | string> {
   if (Number.isNaN(purchasedAt.getTime())) return 'Invalid purchase date'
   const arrivedAt = data.arrivedAt ? new Date(data.arrivedAt) : null
   if (arrivedAt && Number.isNaN(arrivedAt.getTime())) return 'Invalid arrival date'
+  const estimatedArrivalAt = data.estimatedArrivalAt ? new Date(data.estimatedArrivalAt) : null
+  if (estimatedArrivalAt && Number.isNaN(estimatedArrivalAt.getTime())) {
+    return 'Invalid estimated arrival date'
+  }
 
   const shipmentId = data.shipmentId || null
   let batchStatus: BatchStatus = BatchStatus.PURCHASED
@@ -80,6 +87,7 @@ async function prepareOrder(data: ImportData): Promise<PreparedOrder | string> {
     supplier: data.supplier || 'Amazon',
     purchasedAt,
     arrivedAt,
+    estimatedArrivalAt,
     shipmentId,
     batchStatus,
   }
@@ -95,7 +103,7 @@ async function prepareOrder(data: ImportData): Promise<PreparedOrder | string> {
  */
 async function recordOrder(
   tx: Tx,
-  { data, supplier, purchasedAt, arrivedAt, shipmentId, batchStatus }: PreparedOrder,
+  { data, supplier, purchasedAt, arrivedAt, estimatedArrivalAt, shipmentId, batchStatus }: PreparedOrder,
   createdSkus: Map<string, string>
 ) {
   const { orderNumber, lines, tax, shipping } = data
@@ -157,6 +165,7 @@ async function recordOrder(
         status: batchStatus as unknown as PurchaseStatus,
         purchasedAt,
         arrivedAt,
+        estimatedArrivalAt,
       },
     })
     await tx.inventoryBatch.create({

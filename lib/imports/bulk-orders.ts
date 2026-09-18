@@ -25,6 +25,8 @@ export interface BulkOrder {
   purchasedAt: string | null
   /** ISO `YYYY-MM-DD`, when the whole order already reached the courier. */
   arrivedAt: string | null
+  /** ISO `YYYY-MM-DD`, best guess of when it reaches the courier. */
+  estimatedArrivalAt: string | null
   tax: number
   shipping: number
   items: BulkOrderItem[]
@@ -36,6 +38,7 @@ export const BULK_EXAMPLE = `[
     "orderNumber": "111-1234567-1234567",
     "supplier": "Amazon",
     "purchasedAt": "2026-09-01",
+    "estimatedArrivalAt": "2026-09-15",
     "tax": 12.5,
     "shipping": 0,
     "items": [
@@ -65,6 +68,7 @@ const orderSchema = z.object({
   supplier: optionalText.transform((s) => s ?? 'Amazon'),
   purchasedAt: optionalDate,
   arrivedAt: optionalDate,
+  estimatedArrivalAt: optionalDate,
   tax: money,
   shipping: money,
   items: z
