@@ -216,6 +216,16 @@
     "movedToFull": "Lote en Full",
     "movedToDepot": "Lote en depósito"
   },
+  "MoveFull": {
+    "sendToFull": "Mandar a Full",
+    "backToDepot": "Volver a depósito",
+    "quantity": "Cantidad",
+    "toFullHint": "Hasta {max} unidades en depósito. Para stock que ya está en Full, sin crear un envío Full.",
+    "toDepotHint": "Hasta {max} unidades pasadas a Full a mano. Las de un envío Full se manejan desde el envío.",
+    "move": "Mover",
+    "movedToFull": "Stock pasado a Full",
+    "movedToDepot": "Stock devuelto a depósito"
+  },
   "Purchases": {
     "title": "Compras",
     "description": "Una fila por compra. Si una compra llega en partes, se divide en dos filas, cada una con su fecha de llegada.",

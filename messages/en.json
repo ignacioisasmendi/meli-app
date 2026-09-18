@@ -216,6 +216,16 @@
     "movedToFull": "Batch in Full",
     "movedToDepot": "Batch at depot"
   },
+  "MoveFull": {
+    "sendToFull": "Send to Full",
+    "backToDepot": "Back to depot",
+    "quantity": "Quantity",
+    "toFullHint": "Up to {max} units at the depot. For stock already in Full, without creating a Full shipment.",
+    "toDepotHint": "Up to {max} units placed in Full by hand. Units from a Full shipment are managed from the shipment.",
+    "move": "Move",
+    "movedToFull": "Stock moved to Full",
+    "movedToDepot": "Stock moved back to depot"
+  },
   "Purchases": {
     "title": "Purchases",
     "description": "One row per purchase. A purchase that arrives in parts is split into two rows, each with its own arrival date.",

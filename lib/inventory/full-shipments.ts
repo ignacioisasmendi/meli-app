@@ -2,7 +2,7 @@ import 'server-only'
 import { format } from 'date-fns'
 import { Prisma, FullShipmentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { AT_DEPOT_WHERE } from '@/lib/inventory/stock'
+import { AT_DEPOT_WHERE, PLACED_IN_FULL_WHERE } from '@/lib/inventory/stock'
 import { splitBatch } from '@/lib/inventory/split'
 import { getItem, searchFulfillmentOperations } from '@/lib/mercadolibre/client'
 import { sendTelegramMessage } from '@/lib/telegram/client'
@@ -165,6 +165,45 @@ export async function allocateToFull(tx: Tx, fullShipmentId: string, lines: Full
     if (remaining > 0) {
       throw new Error(`Not enough received stock: ${remaining} unit(s) short for one product`)
     }
+  }
+}
+
+/**
+ * Moves `quantity` on-hand units of a product into Full (or back to the depot)
+ * without a Full box — for stock that is already there. Takes the oldest batches
+ * first, like `allocateToFull`, splitting the last one when only part of it
+ * moves. Only batches placed by hand come back: a Full box's units follow the box.
+ */
+export async function placeInFull(
+  tx: Tx,
+  params: { productId: string; quantity: number; toFull: boolean }
+) {
+  const batches = await tx.inventoryBatch.findMany({
+    where: {
+      productId: params.productId,
+      ...(params.toFull ? AT_DEPOT_WHERE : PLACED_IN_FULL_WHERE),
+      remainingQuantity: { gt: 0 },
+    },
+    orderBy: { purchasedAt: 'asc' },
+  })
+  let remaining = params.quantity
+  for (const batch of batches) {
+    if (remaining <= 0) break
+    const take = Math.min(remaining, batch.remainingQuantity)
+    remaining -= take
+    // A batch with sales on it has quantity > remaining; its sold units can't
+    // move, so only a batch whose every unit moves is flipped in place.
+    if (take === batch.quantity) {
+      await tx.inventoryBatch.update({
+        where: { id: batch.id },
+        data: { placedInFull: params.toFull },
+      })
+    } else {
+      await splitBatch(tx, batch, take, { placedInFull: params.toFull })
+    }
+  }
+  if (remaining > 0) {
+    throw new Error(`Only ${params.quantity - remaining} unit(s) can be moved`)
   }
 }
 

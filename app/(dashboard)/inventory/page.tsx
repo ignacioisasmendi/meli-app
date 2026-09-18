@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { AdjustStockDialog } from '@/components/inventory/adjust-stock-dialog'
 import { AddStockDialog } from '@/components/inventory/add-stock-dialog'
+import { MoveFullDialog } from '@/components/inventory/move-full-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -16,7 +17,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatUsd } from '@/lib/utils'
-import { getBatchLocations, stockViewFrom, type StockView } from '@/lib/inventory/stock'
+import {
+  AT_DEPOT_WHERE,
+  PLACED_IN_FULL_WHERE,
+  getBatchLocations,
+  stockViewFrom,
+  type StockView,
+} from '@/lib/inventory/stock'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +34,10 @@ type Row = {
   minStock: number
   averageCostUsd: number
   view: StockView
+  /** Units in batches at the depot — what can be sent to Full by hand. */
+  atDepot: number
+  /** Units placed in Full by hand — what can come back to the depot. */
+  placedInFull: number
 }
 
 function InventoryTable({ rows, column }: { rows: Row[]; column: keyof StockView }) {
@@ -41,7 +52,7 @@ function InventoryTable({ rows, column }: { rows: Row[]; column: keyof StockView
             <TableHead>{t('sku')}</TableHead>
             <TableHead className="text-right">{t('qty')}</TableHead>
             <TableHead className="text-right">{t('valueUsd')}</TableHead>
-            <TableHead className="w-12" />
+            <TableHead className="w-24" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -71,7 +82,17 @@ function InventoryTable({ rows, column }: { rows: Row[]; column: keyof StockView
                   {formatUsd(qty * r.averageCostUsd)}
                 </TableCell>
                 <TableCell>
-                  <AdjustStockDialog productId={r.id} productName={r.name} />
+                  <div className="flex">
+                    {(column === 'received' || column === 'full') && (
+                      <MoveFullDialog
+                        productId={r.id}
+                        productName={r.name}
+                        toFull={column === 'received'}
+                        max={column === 'received' ? r.atDepot : r.placedInFull}
+                      />
+                    )}
+                    <AdjustStockDialog productId={r.id} productName={r.name} />
+                  </div>
                 </TableCell>
               </TableRow>
             )
@@ -88,7 +109,22 @@ export default async function InventoryPage() {
     where: { archived: false },
     orderBy: { name: 'asc' },
   })
-  const locations = await getBatchLocations(products.map((p) => p.id))
+  const productIds = products.map((p) => p.id)
+  const [locations, depot, placed] = await Promise.all([
+    getBatchLocations(productIds),
+    prisma.inventoryBatch.groupBy({
+      by: ['productId'],
+      where: { productId: { in: productIds }, ...AT_DEPOT_WHERE },
+      _sum: { remainingQuantity: true },
+    }),
+    prisma.inventoryBatch.groupBy({
+      by: ['productId'],
+      where: { productId: { in: productIds }, ...PLACED_IN_FULL_WHERE },
+      _sum: { remainingQuantity: true },
+    }),
+  ])
+  const sumOf = (rows: typeof depot, productId: string) =>
+    rows.find((r) => r.productId === productId)?._sum.remainingQuantity ?? 0
   const rows: Row[] = products.map((p) => {
     const { inTransit, inFull } = locations.get(p.id)!
     return {
@@ -98,6 +134,8 @@ export default async function InventoryPage() {
       minStock: p.minStock,
       averageCostUsd: p.averageCostUsd,
       view: stockViewFrom(p, inTransit, inFull),
+      atDepot: sumOf(depot, p.id),
+      placedInFull: sumOf(placed, p.id),
     }
   })
 

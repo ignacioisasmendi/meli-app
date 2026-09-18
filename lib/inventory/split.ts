@@ -23,7 +23,9 @@ export async function splitBatch(
   tx: Tx,
   batch: InventoryBatch,
   take: number,
-  overrides: Partial<Pick<InventoryBatch, 'purchaseId' | 'shipmentId' | 'fullShipmentId'>> = {}
+  overrides: Partial<
+    Pick<InventoryBatch, 'purchaseId' | 'shipmentId' | 'fullShipmentId' | 'placedInFull'>
+  > = {}
 ): Promise<InventoryBatch> {
   if (take <= 0 || take >= batch.quantity || take > batch.remainingQuantity) {
     throw new Error(`Cannot split ${take} unit(s) off a batch with ${batch.remainingQuantity} left`)

@@ -12,6 +12,7 @@ import {
   recomputeAverageCost,
 } from '@/lib/inventory/stock'
 import { checkLowStock } from '@/lib/inventory/alerts'
+import { placeInFull } from '@/lib/inventory/full-shipments'
 import { BATCH_LOCATION_VALUES, type BatchLocation } from '@/lib/statuses'
 import type { ActionResult } from '@/actions/products'
 
@@ -157,6 +158,30 @@ export async function setBatchInFull(batchId: string, inFull: boolean): Promise<
   await prisma.inventoryBatch.update({ where: { id: batchId }, data: { placedInFull: inFull } })
 
   revalidateBatch(batch.productId)
+  return { ok: true }
+}
+
+const moveFullSchema = z.object({
+  productId: z.string().min(1),
+  quantity: z.coerce.number().int().positive('Quantity must be positive'),
+  toFull: z.boolean(),
+})
+
+/** Moves N units of a product into Full, or back to the depot, without a Full box. */
+export async function moveStockToFull(
+  input: z.input<typeof moveFullSchema>
+): Promise<ActionResult> {
+  await requireUser()
+  const parsed = moveFullSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+  try {
+    await prisma.$transaction((tx) => placeInFull(tx, parsed.data))
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not move stock' }
+  }
+  revalidateBatch(parsed.data.productId)
   return { ok: true }
 }
 

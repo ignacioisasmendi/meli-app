@@ -84,6 +84,13 @@ const IN_FULL_WHERE = {
   OR: [{ fullShipmentId: { not: null } }, { placedInFull: true }],
 } satisfies Prisma.InventoryBatchWhereInput
 
+/** On-hand batches placed in Full by hand, with no Full box behind them. */
+export const PLACED_IN_FULL_WHERE = {
+  status: { in: ON_HAND_STATUSES },
+  fullShipmentId: null,
+  placedInFull: true,
+} satisfies Prisma.InventoryBatchWhereInput
+
 /** On-hand batches still at the local depot — what a Full box can take. */
 export const AT_DEPOT_WHERE = {
   status: { in: ON_HAND_STATUSES },
