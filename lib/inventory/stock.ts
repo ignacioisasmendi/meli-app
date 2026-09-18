@@ -420,3 +420,46 @@ export async function applyAdjustment(
     note: params.note,
   })
 }
+
+/**
+ * Brings units that are already on hand into inventory at a known cost, without
+ * a purchase behind them (stock that predates the app, a gift, a found box).
+ * Creates an AVAILABLE batch so FIFO and profit have a real cost to consume, and
+ * counts it as an adjustment — `totalPurchased` only tracks actual purchases.
+ */
+export async function applyStockWithCost(
+  tx: Tx,
+  params: {
+    productId: string
+    quantity: number
+    unitCostUsd: number
+    receivedAt: Date
+    note?: string
+  }
+) {
+  const batch = await tx.inventoryBatch.create({
+    data: {
+      productId: params.productId,
+      quantity: params.quantity,
+      remainingQuantity: params.quantity,
+      goodsUnitCostUsd: params.unitCostUsd,
+      unitCostUsd: params.unitCostUsd,
+      status: BatchStatus.AVAILABLE,
+      purchasedAt: params.receivedAt,
+    },
+  })
+  await tx.product.update({
+    where: { id: params.productId },
+    data: { currentStock: { increment: params.quantity } },
+  })
+  await recordMovement(tx, {
+    productId: params.productId,
+    type: MovementType.ADJUSTMENT,
+    quantity: params.quantity,
+    referenceType: 'batch',
+    referenceId: batch.id,
+    note: params.note,
+  })
+  await recomputeAverageCost(tx, params.productId)
+  return batch
+}

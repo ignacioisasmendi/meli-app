@@ -189,6 +189,25 @@
     "apply": "Apply",
     "stockAdjusted": "Stock adjusted"
   },
+  "AddStock": {
+    "addStock": "Add stock",
+    "description": "Adds units you already have on hand, with their cost, without registering a purchase. They become available to sell.",
+    "product": "Product",
+    "selectProduct": "Select a product",
+    "quantity": "Quantity",
+    "costModeUnit": "Unit cost",
+    "costModeTotal": "Total cost",
+    "unitCostUsd": "Unit cost (USD)",
+    "totalCostUsd": "Total cost (USD)",
+    "derivedTotal": "Total: {value}",
+    "derivedUnit": "Unit cost: {value}",
+    "receivedAt": "Date",
+    "receivedAtHint": "Optional. Sets its FIFO order against other batches; defaults to today.",
+    "note": "Note",
+    "notePlaceholder": "e.g. Opening stock (optional)",
+    "add": "Add",
+    "stockAdded": "Stock added"
+  },
   "Purchases": {
     "title": "Purchases",
     "description": "One row per purchase. A purchase that arrives in parts is split into two rows, each with its own arrival date.",

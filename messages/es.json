@@ -189,6 +189,25 @@
     "apply": "Aplicar",
     "stockAdjusted": "Stock ajustado"
   },
+  "AddStock": {
+    "addStock": "Agregar stock",
+    "description": "Suma unidades que ya tenés en mano, con su costo, sin registrar una compra. Quedan disponibles para vender.",
+    "product": "Producto",
+    "selectProduct": "Seleccioná un producto",
+    "quantity": "Cantidad",
+    "costModeUnit": "Costo unitario",
+    "costModeTotal": "Costo total",
+    "unitCostUsd": "Costo unitario (USD)",
+    "totalCostUsd": "Costo total (USD)",
+    "derivedTotal": "Total: {value}",
+    "derivedUnit": "Costo unitario: {value}",
+    "receivedAt": "Fecha",
+    "receivedAtHint": "Opcional. Define el orden FIFO frente a otros lotes; por defecto, hoy.",
+    "note": "Nota",
+    "notePlaceholder": "ej. Stock inicial (opcional)",
+    "add": "Agregar",
+    "stockAdded": "Stock agregado"
+  },
   "Purchases": {
     "title": "Compras",
     "description": "Una fila por compra. Si una compra llega en partes, se divide en dos filas, cada una con su fecha de llegada.",

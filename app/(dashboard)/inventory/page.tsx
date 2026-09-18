@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { AdjustStockDialog } from '@/components/inventory/adjust-stock-dialog'
+import { AddStockDialog } from '@/components/inventory/add-stock-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -107,6 +108,7 @@ export default async function InventoryPage() {
       <PageHeader
         title={t('title')}
         description={t('totalAvailableValue', { value: formatUsd(totalValue) })}
+        action={<AddStockDialog products={rows.map((r) => ({ id: r.id, name: r.name }))} />}
       />
 
       <Tabs defaultValue="received">
