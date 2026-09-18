@@ -191,7 +191,7 @@
   },
   "AddStock": {
     "addStock": "Add stock",
-    "description": "Adds units you already have on hand, with their cost, without registering a purchase. They become available to sell.",
+    "description": "Adds units with their cost without registering a purchase — stock you already have or that is on its way.",
     "product": "Product",
     "selectProduct": "Select a product",
     "quantity": "Quantity",
@@ -202,11 +202,12 @@
     "derivedTotal": "Total: {value}",
     "derivedUnit": "Unit cost: {value}",
     "receivedAt": "Date",
-    "receivedAtHint": "Optional. Sets its FIFO order against other batches; defaults to today.",
     "note": "Note",
     "notePlaceholder": "e.g. Opening stock (optional)",
     "add": "Add",
-    "stockAdded": "Stock added"
+    "stockAdded": "Stock added",
+    "status": "Status",
+    "statusHint": "Warehouse or Available can be sold right away; any other status counts as in transit. The date sets FIFO order (defaults to today)."
   },
   "Purchases": {
     "title": "Purchases",

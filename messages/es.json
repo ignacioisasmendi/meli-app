@@ -191,7 +191,7 @@
   },
   "AddStock": {
     "addStock": "Agregar stock",
-    "description": "Suma unidades que ya tenés en mano, con su costo, sin registrar una compra. Quedan disponibles para vender.",
+    "description": "Suma unidades con su costo sin registrar una compra — stock que ya tenés o que viene en camino.",
     "product": "Producto",
     "selectProduct": "Seleccioná un producto",
     "quantity": "Cantidad",
@@ -202,11 +202,12 @@
     "derivedTotal": "Total: {value}",
     "derivedUnit": "Costo unitario: {value}",
     "receivedAt": "Fecha",
-    "receivedAtHint": "Opcional. Define el orden FIFO frente a otros lotes; por defecto, hoy.",
     "note": "Nota",
     "notePlaceholder": "ej. Stock inicial (opcional)",
     "add": "Agregar",
-    "stockAdded": "Stock agregado"
+    "stockAdded": "Stock agregado",
+    "status": "Estado",
+    "statusHint": "En Depósito o Disponible se puede vender ya; los demás estados cuentan como en tránsito. La fecha define el orden FIFO (por defecto, hoy)."
   },
   "Purchases": {
     "title": "Compras",

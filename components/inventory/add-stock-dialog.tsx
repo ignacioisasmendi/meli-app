@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PURCHASE_STATUS_VALUES } from '@/lib/statuses'
 import { formatUsd } from '@/lib/utils'
 import { addStockWithCost } from '@/actions/inventory'
 
@@ -34,9 +35,11 @@ interface ProductOption {
 
 export function AddStockDialog({ products }: { products: ProductOption[] }) {
   const t = useTranslations('AddStock')
+  const tStatus = useTranslations('Status')
   const tCommon = useTranslations('Common')
   const [open, setOpen] = useState(false)
   const [productId, setProductId] = useState('')
+  const [status, setStatus] = useState('AVAILABLE')
   const [costMode, setCostMode] = useState<'unit' | 'total'>('unit')
   const [quantity, setQuantity] = useState('')
   const [cost, setCost] = useState('')
@@ -50,12 +53,14 @@ export function AddStockDialog({ products }: { products: ProductOption[] }) {
   function onSubmit(formData: FormData) {
     formData.set('productId', productId)
     formData.set('costMode', costMode)
+    formData.set('status', status)
     startTransition(async () => {
       const result = await addStockWithCost(formData)
       if (result.ok) {
         toast.success(t('stockAdded'))
         setOpen(false)
         setProductId('')
+        setStatus('AVAILABLE')
         setQuantity('')
         setCost('')
       } else {
@@ -141,11 +146,28 @@ export function AddStockDialog({ products }: { products: ProductOption[] }) {
               )}
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="add-receivedAt">{t('receivedAt')}</Label>
-              <Input id="add-receivedAt" name="receivedAt" type="date" />
-              <p className="text-xs text-muted-foreground">{t('receivedAtHint')}</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>{t('status')}</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PURCHASE_STATUS_VALUES.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {tStatus(value)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="add-receivedAt">{t('receivedAt')}</Label>
+                <Input id="add-receivedAt" name="receivedAt" type="date" />
+              </div>
             </div>
+            <p className="-mt-2 text-xs text-muted-foreground">{t('statusHint')}</p>
 
             <div className="grid gap-2">
               <Label htmlFor="add-note">{t('note')}</Label>

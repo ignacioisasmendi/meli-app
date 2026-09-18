@@ -424,8 +424,9 @@ export async function applyAdjustment(
 /**
  * Brings units that are already on hand into inventory at a known cost, without
  * a purchase behind them (stock that predates the app, a gift, a found box).
- * Creates an AVAILABLE batch so FIFO and profit have a real cost to consume, and
- * counts it as an adjustment — `totalPurchased` only tracks actual purchases.
+ * Creates a batch so FIFO and profit have a real cost to consume — sellable if
+ * it starts on hand, in transit otherwise — and counts it as an adjustment:
+ * `totalPurchased` only tracks actual purchases.
  */
 export async function applyStockWithCost(
   tx: Tx,
@@ -433,6 +434,7 @@ export async function applyStockWithCost(
     productId: string
     quantity: number
     unitCostUsd: number
+    status: BatchStatus
     receivedAt: Date
     note?: string
   }
@@ -444,7 +446,7 @@ export async function applyStockWithCost(
       remainingQuantity: params.quantity,
       goodsUnitCostUsd: params.unitCostUsd,
       unitCostUsd: params.unitCostUsd,
-      status: BatchStatus.AVAILABLE,
+      status: params.status,
       purchasedAt: params.receivedAt,
     },
   })

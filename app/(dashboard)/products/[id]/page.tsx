@@ -20,6 +20,7 @@ import {
 import { formatDateTime, formatUsd } from '@/lib/utils'
 import { getInFull, getInTransit, stockViewFrom } from '@/lib/inventory/stock'
 import { StatusBadge } from '@/components/dashboard/status-badge'
+import { BatchStatusSelect } from '@/components/inventory/batch-status-select'
 
 export const dynamic = 'force-dynamic'
 
@@ -149,7 +150,12 @@ export default async function ProductDetailPage({
                       )}
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={b.status} />
+                      {/* Stock loaded without a purchase has nothing else driving its status. */}
+                      {!b.purchaseId && !b.shipmentId && !b.fullShipmentId ? (
+                        <BatchStatusSelect batchId={b.id} status={b.status} />
+                      ) : (
+                        <StatusBadge status={b.status} />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
