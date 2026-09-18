@@ -672,7 +672,7 @@
     "description": "Paste a JSON array of supplier orders and import them all at once. Each order's tax + shipping is split across its items, exactly like the single import.",
     "pasteTitle": "Orders JSON",
     "formatHint": "An array of orders, each with its items:",
-    "fieldsHint": "Required: items[].name, items[].unitPrice (USD per unit, before tax). Optional: orderNumber, supplier (default Amazon), purchasedAt / arrivedAt / estimatedArrivalAt (YYYY-MM-DD), tax, shipping, items[].quantity (default 1), items[].sku (maps onto that product, or becomes the new product's SKU). Up to 100 orders.",
+    "fieldsHint": "Required: items[].name, items[].unitPrice (USD per unit, before tax). Optional: orderNumber, supplier (default Amazon), purchasedAt / arrivedAt / estimatedArrivalAt (YYYY-MM-DD), discount, tax, shipping, items[].quantity (default 1), items[].sku (maps onto that product, or becomes the new product's SKU). Up to 100 orders.",
     "copyExample": "Copy example",
     "copied": "Copied",
     "loadFile": "Load .json file",
@@ -699,7 +699,13 @@
     "importing": "Importing…",
     "importOrders": "{count, plural, one {Import # order} other {Import # orders}}",
     "imported": "{count, plural, one {# order imported} other {# orders imported}}",
-    "estimated": "ETA {date}"
+    "estimated": "ETA {date}",
+    "discount": "discount −{value}",
+    "warning": {
+      "subtotalMismatch": "Items add up to {lineSum} but the order says {itemsSubtotal} — check quantities and prices",
+      "grandTotalMismatch": "This adds up to {computed} but the order total is {grandTotal} — check the discount, tax and shipping",
+      "unexpectedCurrency": "Amounts are in {currency}, not USD — convert them before importing"
+    }
   },
   "EstimatedArrival": {
     "label": "ETA {date}",

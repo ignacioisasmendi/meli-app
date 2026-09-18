@@ -29,7 +29,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { formatUsd } from '@/lib/utils'
 import { allocateOrder } from '@/lib/inventory/landed'
 import { matchProduct, suggestSku } from '@/lib/imports/match-product'
-import { BULK_EXAMPLE, parseBulkOrders, type BulkOrder } from '@/lib/imports/bulk-orders'
+import {
+  BULK_EXAMPLE,
+  parseBulkOrders,
+  type BulkOrder,
+  type BulkWarning,
+} from '@/lib/imports/bulk-orders'
 import { importPurchasesBulk, type BulkImportPayload } from '@/actions/imports'
 import type { ShipmentOption } from '@/components/purchases/purchase-import'
 
@@ -49,6 +54,8 @@ interface DraftLine {
   name: string
   quantity: number
   unitPrice: number
+  /** List price before the order discount, shown for reference only. */
+  listPrice: number
 }
 
 interface DraftOrder extends Omit<BulkOrder, 'items'> {
@@ -74,7 +81,12 @@ function toDrafts(orders: BulkOrder[], products: ProductOption[]): DraftOrder[] 
   return orders.map(({ items, ...order }) => ({
     ...order,
     lines: items.map((item): DraftLine => {
-      const base = { name: item.name, quantity: item.quantity, unitPrice: item.unitPrice }
+      const base = {
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        listPrice: item.listPrice,
+      }
       const explicit = item.sku ? bySku.get(item.sku.toUpperCase()) : undefined
       const match = explicit ?? (item.sku ? null : matchProduct(item.name, products))
       if (match) {
@@ -114,6 +126,23 @@ export function BulkOrderImport({
   const [drafts, setDrafts] = useState<DraftOrder[] | null>(null)
 
   const existing = new Set(existingOrderKeys)
+
+  function describeWarning(w: BulkWarning): string {
+    switch (w.code) {
+      case 'subtotalMismatch':
+        return t('warning.subtotalMismatch', {
+          lineSum: formatUsd(w.lineSum),
+          itemsSubtotal: formatUsd(w.itemsSubtotal),
+        })
+      case 'grandTotalMismatch':
+        return t('warning.grandTotalMismatch', {
+          computed: formatUsd(w.computed),
+          grandTotal: formatUsd(w.grandTotal),
+        })
+      case 'unexpectedCurrency':
+        return t('warning.unexpectedCurrency', { currency: w.currency })
+    }
+  }
 
   function read(source = text) {
     const result = parseBulkOrders(source)
@@ -323,6 +352,8 @@ export function BulkOrderImport({
                       {!order.arrivedAt &&
                         order.estimatedArrivalAt &&
                         ` · ${t('estimated', { date: order.estimatedArrivalAt })}`}
+                      {order.discount > 0 &&
+                        ` · ${t('discount', { value: formatUsd(order.discount) })}`}
                       {' · '}
                       {t('taxShipping', {
                         tax: formatUsd(order.tax),
@@ -331,6 +362,15 @@ export function BulkOrderImport({
                       {' · '}
                       <span className="font-medium text-foreground">{formatUsd(total)}</span>
                     </p>
+                    {order.warnings.map((w) => (
+                      <p
+                        key={w.code}
+                        className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-500"
+                      >
+                        <AlertTriangle className="size-3 shrink-0" />
+                        {describeWarning(w)}
+                      </p>
+                    ))}
                   </div>
                   <Button
                     type="button"
@@ -396,7 +436,14 @@ export function BulkOrderImport({
                             </div>
                           </TableCell>
                           <TableCell className="text-right">{line.quantity}</TableCell>
-                          <TableCell className="text-right">{formatUsd(line.unitPrice)}</TableCell>
+                          <TableCell className="text-right">
+                            {formatUsd(line.unitPrice)}
+                            {line.listPrice !== line.unitPrice && (
+                              <span className="block text-xs text-muted-foreground line-through">
+                                {formatUsd(line.listPrice)}
+                              </span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
                             {formatUsd(allocated[l].unitCostUsd)}
                           </TableCell>

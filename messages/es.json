@@ -672,7 +672,7 @@
     "description": "Pegá un array JSON de órdenes del proveedor e importalas todas juntas. El impuesto y el envío de cada orden se reparten entre sus ítems, igual que en la importación individual.",
     "pasteTitle": "JSON de órdenes",
     "formatHint": "Un array de órdenes, cada una con sus ítems:",
-    "fieldsHint": "Obligatorios: items[].name, items[].unitPrice (USD por unidad, antes de impuestos). Opcionales: orderNumber, supplier (por defecto Amazon), purchasedAt / arrivedAt / estimatedArrivalAt (AAAA-MM-DD), tax, shipping, items[].quantity (por defecto 1), items[].sku (se vincula a ese producto, o es el SKU del producto nuevo). Hasta 100 órdenes.",
+    "fieldsHint": "Obligatorios: items[].name, items[].unitPrice (USD por unidad, antes de impuestos). Opcionales: orderNumber, supplier (por defecto Amazon), purchasedAt / arrivedAt / estimatedArrivalAt (AAAA-MM-DD), discount, tax, shipping, items[].quantity (por defecto 1), items[].sku (se vincula a ese producto, o es el SKU del producto nuevo). Hasta 100 órdenes.",
     "copyExample": "Copiar ejemplo",
     "copied": "Copiado",
     "loadFile": "Cargar archivo .json",
@@ -699,7 +699,13 @@
     "importing": "Importando…",
     "importOrders": "{count, plural, one {Importar # orden} other {Importar # órdenes}}",
     "imported": "{count, plural, one {# orden importada} other {# órdenes importadas}}",
-    "estimated": "estimada {date}"
+    "estimated": "estimada {date}",
+    "discount": "descuento −{value}",
+    "warning": {
+      "subtotalMismatch": "Los ítems suman {lineSum} pero la orden dice {itemsSubtotal} — revisá cantidades y precios",
+      "grandTotalMismatch": "Esto suma {computed} pero el total de la orden es {grandTotal} — revisá descuento, impuesto y envío",
+      "unexpectedCurrency": "Los montos están en {currency}, no en USD — convertilos antes de importar"
+    }
   },
   "EstimatedArrival": {
     "label": "Estimada {date}",
