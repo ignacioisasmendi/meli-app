@@ -115,7 +115,7 @@ export function reconcileOrder(order: ParsedOrder): OrderWarning[] {
 /* ── Reading JSON pasted back from claude.ai ─────────────────────────────── */
 
 /** "US$1,234.50" / "45.00" / 45 → 45. Left untouched if it isn't number-ish. */
-function toNumber(value: unknown): unknown {
+export function toNumber(value: unknown): unknown {
   if (typeof value !== 'string') return value
   const cleaned = value.replace(/[^0-9.-]/g, '')
   const n = Number(cleaned)
@@ -123,7 +123,7 @@ function toNumber(value: unknown): unknown {
 }
 
 /** Accepts "2026-07-28" or anything Date understands ("July 28, 2026"). */
-function toIsoDate(value: unknown): unknown {
+export function toIsoDate(value: unknown): unknown {
   if (typeof value !== 'string') return value
   const text = value.trim()
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text

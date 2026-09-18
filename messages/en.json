@@ -303,7 +303,8 @@
     "importing": "Importing…",
     "importPurchases": "{count, plural, one {Import # purchase} other {Import # purchases}}",
     "arrivalDate": "Arrived at courier",
-    "perUnitWithTax": "{value}/unit with tax"
+    "perUnitWithTax": "{value}/unit with tax",
+    "bulkImport": "Bulk import (JSON)"
   },
   "PurchaseForm": {
     "registerPurchase": "Register purchase",
@@ -664,5 +665,38 @@
     "adding": "Adding…",
     "add": "Add",
     "added": "{count, plural, one {Added # product} other {Added # products}}"
+  },
+  "BulkOrderImport": {
+    "title": "Bulk import purchases",
+    "description": "Paste a JSON array of supplier orders and import them all at once. Each order's tax + shipping is split across its items, exactly like the single import.",
+    "pasteTitle": "Orders JSON",
+    "formatHint": "An array of orders, each with its items:",
+    "fieldsHint": "Required: items[].name, items[].unitPrice (USD per unit, before tax). Optional: orderNumber, supplier (default Amazon), purchasedAt / arrivedAt (YYYY-MM-DD), tax, shipping, items[].quantity (default 1), items[].sku (maps onto that product, or becomes the new product's SKU). Up to 100 orders.",
+    "copyExample": "Copy example",
+    "copied": "Copied",
+    "loadFile": "Load .json file",
+    "placeholder": "[ { \"orderNumber\": \"…\", \"items\": [ … ] }, … ]",
+    "read": "Read orders",
+    "readOrders": "{count, plural, one {Read # order} other {Read # orders}}",
+    "shipment": "Shipment",
+    "notInShipmentYet": "Not in a shipment yet",
+    "shipmentHint": "Applies to every order below. Import freight is added later, when the box arrives.",
+    "orderN": "Order {n}",
+    "alreadyImported": "Already imported",
+    "today": "today",
+    "arrived": "arrived {date}",
+    "taxShipping": "tax {tax} · shipping {shipping}",
+    "removeOrder": "Remove order",
+    "item": "Item",
+    "mapTo": "Map to",
+    "newProduct": "+ New product",
+    "qty": "Qty",
+    "unitPrice": "Unit price",
+    "unitCost": "Unit cost (w/ tax & ship.)",
+    "summary": "{orders, plural, one {# order} other {# orders}} · {lines, plural, one {# line} other {# lines}} · {units} units · {newProducts, plural, =0 {no new products} one {# new product} other {# new products}} ·",
+    "removeDuplicates": "Remove the orders already imported",
+    "importing": "Importing…",
+    "importOrders": "{count, plural, one {Import # order} other {Import # orders}}",
+    "imported": "{count, plural, one {# order imported} other {# orders imported}}"
   }
 }

@@ -303,7 +303,8 @@
     "importing": "Importando…",
     "importPurchases": "{count, plural, one {Importar # compra} other {Importar # compras}}",
     "arrivalDate": "Llegada al courier",
-    "perUnitWithTax": "{value} c/u con imp."
+    "perUnitWithTax": "{value} c/u con imp.",
+    "bulkImport": "Importación masiva (JSON)"
   },
   "PurchaseForm": {
     "registerPurchase": "Registrar compra",
@@ -664,5 +665,38 @@
     "adding": "Agregando…",
     "add": "Agregar",
     "added": "{count, plural, one {Se agregó # producto} other {Se agregaron # productos}}"
+  },
+  "BulkOrderImport": {
+    "title": "Importación masiva de compras",
+    "description": "Pegá un array JSON de órdenes del proveedor e importalas todas juntas. El impuesto y el envío de cada orden se reparten entre sus ítems, igual que en la importación individual.",
+    "pasteTitle": "JSON de órdenes",
+    "formatHint": "Un array de órdenes, cada una con sus ítems:",
+    "fieldsHint": "Obligatorios: items[].name, items[].unitPrice (USD por unidad, antes de impuestos). Opcionales: orderNumber, supplier (por defecto Amazon), purchasedAt / arrivedAt (AAAA-MM-DD), tax, shipping, items[].quantity (por defecto 1), items[].sku (se vincula a ese producto, o es el SKU del producto nuevo). Hasta 100 órdenes.",
+    "copyExample": "Copiar ejemplo",
+    "copied": "Copiado",
+    "loadFile": "Cargar archivo .json",
+    "placeholder": "[ { \"orderNumber\": \"…\", \"items\": [ … ] }, … ]",
+    "read": "Leer órdenes",
+    "readOrders": "{count, plural, one {Se leyó # orden} other {Se leyeron # órdenes}}",
+    "shipment": "Envío",
+    "notInShipmentYet": "Todavía sin envío asignado",
+    "shipmentHint": "Se aplica a todas las órdenes de abajo. El flete de importación se agrega después, cuando llega la caja.",
+    "orderN": "Orden {n}",
+    "alreadyImported": "Ya importada",
+    "today": "hoy",
+    "arrived": "llegó {date}",
+    "taxShipping": "impuesto {tax} · envío {shipping}",
+    "removeOrder": "Quitar orden",
+    "item": "Ítem",
+    "mapTo": "Vincular a",
+    "newProduct": "+ Producto nuevo",
+    "qty": "Cant.",
+    "unitPrice": "Precio unit.",
+    "unitCost": "Costo unit. (c/ imp. y envío)",
+    "summary": "{orders, plural, one {# orden} other {# órdenes}} · {lines, plural, one {# línea} other {# líneas}} · {units} unidades · {newProducts, plural, =0 {sin productos nuevos} one {# producto nuevo} other {# productos nuevos}} ·",
+    "removeDuplicates": "Quitá las órdenes ya importadas",
+    "importing": "Importando…",
+    "importOrders": "{count, plural, one {Importar # orden} other {Importar # órdenes}}",
+    "imported": "{count, plural, one {# orden importada} other {# órdenes importadas}}"
   }
 }
