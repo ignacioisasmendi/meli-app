@@ -23,7 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PURCHASE_STATUS_VALUES } from '@/lib/statuses'
+import { formatUsd } from '@/lib/utils'
 import { registerPurchase } from '@/actions/purchases'
 
 interface ProductOption {
@@ -39,17 +41,28 @@ export function PurchaseFormDialog({ products }: { products: ProductOption[] }) 
   const [open, setOpen] = useState(false)
   const [productId, setProductId] = useState('')
   const [status, setStatus] = useState('PURCHASED')
+  const [costMode, setCostMode] = useState<'unit' | 'total'>('unit')
+  const [quantity, setQuantity] = useState('')
+  const [cost, setCost] = useState('')
   const [isPending, startTransition] = useTransition()
+
+  const qty = Number(quantity)
+  const amount = Number(cost)
+  const derived =
+    qty > 0 && amount > 0 ? (costMode === 'unit' ? qty * amount : amount / qty) : null
 
   function onSubmit(formData: FormData) {
     formData.set('productId', productId)
     formData.set('status', status)
+    formData.set('costMode', costMode)
     startTransition(async () => {
       const result = await registerPurchase(formData)
       if (result.ok) {
         toast.success(t('purchaseRegistered'))
         setOpen(false)
         setProductId('')
+        setQuantity('')
+        setCost('')
       } else {
         toast.error(result.error)
       }
@@ -88,22 +101,49 @@ export function PurchaseFormDialog({ products }: { products: ProductOption[] }) 
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="quantity">{t('quantity')}</Label>
-                <Input id="quantity" name="quantity" type="number" min={1} required />
+            <div className="grid gap-2">
+              <Tabs value={costMode} onValueChange={(v) => setCostMode(v as 'unit' | 'total')}>
+                <TabsList>
+                  <TabsTrigger value="unit">{t('costModeUnit')}</TabsTrigger>
+                  <TabsTrigger value="total">{t('costModeTotal')}</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="quantity">{t('quantity')}</Label>
+                  <Input
+                    id="quantity"
+                    name="quantity"
+                    type="number"
+                    min={1}
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="cost">
+                    {costMode === 'unit' ? t('unitCostUsd') : t('totalCostUsd')}
+                  </Label>
+                  <Input
+                    id="cost"
+                    name="cost"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={cost}
+                    onChange={(e) => setCost(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="unitCostUsd">{t('unitCostUsd')}</Label>
-                <Input
-                  id="unitCostUsd"
-                  name="unitCostUsd"
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  required
-                />
-              </div>
+              {derived !== null && (
+                <p className="text-xs text-muted-foreground">
+                  {costMode === 'unit'
+                    ? t('derivedTotal', { value: formatUsd(derived) })
+                    : t('derivedUnit', { value: formatUsd(derived) })}
+                </p>
+              )}
             </div>
 
             <div className="grid gap-2">

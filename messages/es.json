@@ -281,7 +281,12 @@
     "register": "Registrar",
     "purchaseRegistered": "Compra registrada",
     "arrivedAt": "Fecha de llegada",
-    "arrivedAtHint": "Opcional. Cuándo llegó al courier en EE. UU."
+    "arrivedAtHint": "Opcional. Cuándo llegó al courier en EE. UU.",
+    "costModeUnit": "Costo unitario",
+    "costModeTotal": "Costo total",
+    "totalCostUsd": "Costo total (USD)",
+    "derivedTotal": "Total: {value}",
+    "derivedUnit": "Costo unitario: {value}"
   },
   "OrderStatusSelect": {
     "linesUpdated": "{count, plural, one {# línea actualizada} other {# líneas actualizadas}}",

@@ -281,7 +281,12 @@
     "register": "Register",
     "purchaseRegistered": "Purchase registered",
     "arrivedAt": "Arrival date",
-    "arrivedAtHint": "Optional. When it reached the courier in the USA."
+    "arrivedAtHint": "Optional. When it reached the courier in the USA.",
+    "costModeUnit": "Unit cost",
+    "costModeTotal": "Total cost",
+    "totalCostUsd": "Total cost (USD)",
+    "derivedTotal": "Total: {value}",
+    "derivedUnit": "Unit cost: {value}"
   },
   "OrderStatusSelect": {
     "linesUpdated": "{count, plural, one {# line updated} other {# lines updated}}",

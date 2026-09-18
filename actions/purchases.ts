@@ -14,7 +14,9 @@ import type { ActionResult } from '@/actions/products'
 const purchaseSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   quantity: z.coerce.number().int().positive('Quantity must be positive'),
-  unitCostUsd: z.coerce.number().positive('Unit cost must be positive'),
+  // `cost` is per unit or for the whole line, depending on `costMode`.
+  cost: z.coerce.number().positive('Cost must be positive'),
+  costMode: z.enum(['unit', 'total']).default('unit'),
   supplier: z.string().trim().optional().or(z.literal('')),
   status: z.nativeEnum(PurchaseStatus).default(PurchaseStatus.PURCHASED),
   purchasedAt: z.string().optional(),
@@ -26,7 +28,8 @@ export async function registerPurchase(formData: FormData): Promise<ActionResult
   const parsed = purchaseSchema.safeParse({
     productId: formData.get('productId'),
     quantity: formData.get('quantity'),
-    unitCostUsd: formData.get('unitCostUsd'),
+    cost: formData.get('cost'),
+    costMode: formData.get('costMode') ?? undefined,
     supplier: formData.get('supplier'),
     status: formData.get('status') ?? undefined,
     purchasedAt: formData.get('purchasedAt') ?? undefined,
@@ -35,7 +38,7 @@ export async function registerPurchase(formData: FormData): Promise<ActionResult
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' }
   }
-  const { productId, quantity, unitCostUsd, supplier } = parsed.data
+  const { productId, quantity, cost, costMode, supplier } = parsed.data
   const purchasedAt = parsed.data.purchasedAt ? new Date(parsed.data.purchasedAt) : new Date()
   const arrivedAt = parsed.data.arrivedAt ? new Date(parsed.data.arrivedAt) : null
   if (arrivedAt && Number.isNaN(arrivedAt.getTime())) {
@@ -45,7 +48,9 @@ export async function registerPurchase(formData: FormData): Promise<ActionResult
   const status = arrivedAt
     ? (statusOnArrival(parsed.data.status as unknown as BatchStatus, false) as unknown as PurchaseStatus)
     : parsed.data.status
-  const totalCostUsd = quantity * unitCostUsd
+  // Keep whichever figure was typed exact; the other is derived from it.
+  const unitCostUsd = costMode === 'total' ? cost / quantity : cost
+  const totalCostUsd = costMode === 'total' ? cost : quantity * cost
 
   const product = await prisma.product.findUnique({ where: { id: productId } })
   if (!product) return { ok: false, error: 'Product not found' }
