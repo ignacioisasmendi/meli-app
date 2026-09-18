@@ -280,6 +280,10 @@ model InventoryBatch {
   /// and `quantity` on a Full batch is exactly the units sent.
   fullShipmentId     String?
   fullShipment       FullShipment? @relation(fields: [fullShipmentId], references: [id], onDelete: SetNull)
+  /// In Full without a `FullShipment` — stock that was already there when it
+  /// was loaded or marked by hand. On-hand batches count as in Full when they
+  /// have a Full box OR this flag.
+  placedInFull       Boolean       @default(false)
   quantity           Int
   remainingQuantity  Int
   /// Supplier price + that line's share of the supplier's own tax/shipping.

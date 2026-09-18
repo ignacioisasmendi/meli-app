@@ -34,6 +34,7 @@
     "CUSTOMS": "Aduana",
     "WAREHOUSE": "Depósito",
     "AVAILABLE": "Disponible",
+    "FULL": "En Full",
     "CONFIRMED": "Confirmada",
     "CANCELLED": "Cancelada",
     "RETURN_PENDING": "Devolución pendiente",
@@ -207,7 +208,13 @@
     "add": "Agregar",
     "stockAdded": "Stock agregado",
     "status": "Estado",
-    "statusHint": "En Depósito o Disponible se puede vender ya; los demás estados cuentan como en tránsito. La fecha define el orden FIFO (por defecto, hoy)."
+    "statusHint": "Depósito, Disponible o En Full se puede vender ya; los demás estados cuentan como en tránsito. La fecha define el orden FIFO (por defecto, hoy)."
+  },
+  "BatchFull": {
+    "moveToFull": "Pasar a Full",
+    "moveToDepot": "Volver a depósito",
+    "movedToFull": "Lote en Full",
+    "movedToDepot": "Lote en depósito"
   },
   "Purchases": {
     "title": "Compras",

@@ -34,6 +34,7 @@ export async function splitBatch(
       purchaseId: batch.purchaseId,
       shipmentId: batch.shipmentId,
       fullShipmentId: batch.fullShipmentId,
+      placedInFull: batch.placedInFull,
       ...overrides,
       quantity: take,
       remainingQuantity: take,

@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { PURCHASE_STATUS_VALUES } from '@/lib/statuses'
+import { BATCH_LOCATION_VALUES } from '@/lib/statuses'
 import { formatUsd } from '@/lib/utils'
 import { addStockWithCost } from '@/actions/inventory'
 
@@ -154,7 +154,7 @@ export function AddStockDialog({ products }: { products: ProductOption[] }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {PURCHASE_STATUS_VALUES.map((value) => (
+                    {BATCH_LOCATION_VALUES.map((value) => (
                       <SelectItem key={value} value={value}>
                         {tStatus(value)}
                       </SelectItem>

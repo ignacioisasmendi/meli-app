@@ -34,6 +34,7 @@
     "CUSTOMS": "Customs",
     "WAREHOUSE": "Warehouse",
     "AVAILABLE": "Available",
+    "FULL": "In Full",
     "CONFIRMED": "Confirmed",
     "CANCELLED": "Cancelled",
     "RETURN_PENDING": "Return pending",
@@ -207,7 +208,13 @@
     "add": "Add",
     "stockAdded": "Stock added",
     "status": "Status",
-    "statusHint": "Warehouse or Available can be sold right away; any other status counts as in transit. The date sets FIFO order (defaults to today)."
+    "statusHint": "Warehouse, Available or In Full can be sold right away; any other status counts as in transit. The date sets FIFO order (defaults to today)."
+  },
+  "BatchFull": {
+    "moveToFull": "Move to Full",
+    "moveToDepot": "Back to depot",
+    "movedToFull": "Batch in Full",
+    "movedToDepot": "Batch at depot"
   },
   "Purchases": {
     "title": "Purchases",

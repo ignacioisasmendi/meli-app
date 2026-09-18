@@ -5,8 +5,14 @@ import { z } from 'zod'
 import { BatchStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/session'
-import { applyAdjustment, applyStockWithCost, recomputeAverageCost } from '@/lib/inventory/stock'
+import {
+  ON_HAND_STATUSES,
+  applyAdjustment,
+  applyStockWithCost,
+  recomputeAverageCost,
+} from '@/lib/inventory/stock'
 import { checkLowStock } from '@/lib/inventory/alerts'
+import { BATCH_LOCATION_VALUES, type BatchLocation } from '@/lib/statuses'
 import type { ActionResult } from '@/actions/products'
 
 const adjustSchema = z.object({
@@ -38,13 +44,22 @@ export async function adjustStock(formData: FormData): Promise<ActionResult> {
   return { ok: true }
 }
 
+/** FULL is on hand in a Full warehouse; anything else is a plain batch status. */
+function fromLocation(location: BatchLocation) {
+  return location === 'FULL'
+    ? { status: BatchStatus.AVAILABLE, placedInFull: true }
+    : { status: location, placedInFull: false }
+}
+
 const addStockSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   quantity: z.coerce.number().int().positive('Quantity must be positive'),
   // `cost` is per unit or for all the units, depending on `costMode`.
   cost: z.coerce.number().positive('Cost must be positive'),
   costMode: z.enum(['unit', 'total']).default('unit'),
-  status: z.nativeEnum(BatchStatus).default(BatchStatus.AVAILABLE),
+  status: z
+    .union([z.nativeEnum(BatchStatus), z.literal('FULL')])
+    .default(BatchStatus.AVAILABLE),
   receivedAt: z.string().optional(),
   note: z.string().trim().optional().or(z.literal('')),
 })
@@ -77,7 +92,7 @@ export async function addStockWithCost(formData: FormData): Promise<ActionResult
       productId,
       quantity,
       unitCostUsd,
-      status,
+      ...fromLocation(status),
       receivedAt,
       note: note || undefined,
     })
@@ -92,16 +107,17 @@ export async function addStockWithCost(formData: FormData): Promise<ActionResult
 }
 
 /**
- * Moves a batch that has no purchase behind it (loaded with `addStockWithCost`).
- * Purchase-backed batches follow their purchase, and batches in a shipment or a
- * Full inbound follow that — changing them here would split the two apart.
+ * Moves a batch that has no purchase behind it (loaded with `addStockWithCost`),
+ * including into or out of Full. Purchase-backed batches follow their purchase,
+ * and batches in a shipment or a Full inbound follow that — changing them here
+ * would split the two apart.
  */
 export async function updateBatchStatus(
   batchId: string,
-  status: BatchStatus
+  location: BatchLocation
 ): Promise<ActionResult> {
   await requireUser()
-  if (!Object.values(BatchStatus).includes(status)) return { ok: false, error: 'Invalid status' }
+  if (!BATCH_LOCATION_VALUES.includes(location)) return { ok: false, error: 'Invalid status' }
   const batch = await prisma.inventoryBatch.findUnique({ where: { id: batchId } })
   if (!batch) return { ok: false, error: 'Batch not found' }
   if (batch.purchaseId) {
@@ -112,15 +128,41 @@ export async function updateBatchStatus(
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.inventoryBatch.update({ where: { id: batchId }, data: { status } })
+    await tx.inventoryBatch.update({ where: { id: batchId }, data: fromLocation(location) })
     // On-hand set may have changed → refresh average cost.
     await recomputeAverageCost(tx, batch.productId)
   })
 
   await checkLowStock(batch.productId)
+  revalidateBatch(batch.productId)
+  return { ok: true }
+}
 
+/**
+ * Marks an on-hand batch as sitting in Full (or back at the depot) without a Full
+ * box — for received stock, from a purchase or a shipment, that is already there.
+ * Stock counters don't move: only which bucket the units show in.
+ */
+export async function setBatchInFull(batchId: string, inFull: boolean): Promise<ActionResult> {
+  await requireUser()
+  const batch = await prisma.inventoryBatch.findUnique({ where: { id: batchId } })
+  if (!batch) return { ok: false, error: 'Batch not found' }
+  if (!ON_HAND_STATUSES.includes(batch.status)) {
+    return { ok: false, error: 'Only received stock can be in Full' }
+  }
+  if (batch.fullShipmentId) {
+    return { ok: false, error: 'This batch went in a Full shipment — manage it from there' }
+  }
+
+  await prisma.inventoryBatch.update({ where: { id: batchId }, data: { placedInFull: inFull } })
+
+  revalidateBatch(batch.productId)
+  return { ok: true }
+}
+
+function revalidateBatch(productId: string) {
   revalidatePath('/inventory')
   revalidatePath('/products')
-  revalidatePath(`/products/${batch.productId}`)
-  return { ok: true }
+  revalidatePath('/full-shipments')
+  revalidatePath(`/products/${productId}`)
 }

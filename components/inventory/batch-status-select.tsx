@@ -3,7 +3,6 @@
 import { useTransition } from 'react'
 import { toast } from 'sonner'
 import { useTranslations } from 'next-intl'
-import { BatchStatus } from '@prisma/client'
 import {
   Select,
   SelectContent,
@@ -11,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { PURCHASE_STATUS_VALUES } from '@/lib/statuses'
+import { BATCH_LOCATION_VALUES, type BatchLocation } from '@/lib/statuses'
 import { updateBatchStatus } from '@/actions/inventory'
 
 /** Status picker for a batch loaded without a purchase — see `updateBatchStatus`. */
@@ -20,7 +19,7 @@ export function BatchStatusSelect({
   status,
 }: {
   batchId: string
-  status: BatchStatus
+  status: BatchLocation
 }) {
   const t = useTranslations('Status')
   const tCommon = useTranslations('Common')
@@ -28,7 +27,7 @@ export function BatchStatusSelect({
 
   function onChange(value: string) {
     startTransition(async () => {
-      const result = await updateBatchStatus(batchId, value as BatchStatus)
+      const result = await updateBatchStatus(batchId, value as BatchLocation)
       if (result.ok) toast.success(tCommon('statusUpdated'))
       else toast.error(result.error)
     })
@@ -40,7 +39,7 @@ export function BatchStatusSelect({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {PURCHASE_STATUS_VALUES.map((value) => (
+        {BATCH_LOCATION_VALUES.map((value) => (
           <SelectItem key={value} value={value}>
             {t(value)}
           </SelectItem>

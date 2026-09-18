@@ -78,10 +78,17 @@ export async function getInTransit(productId: string, client: Tx | typeof prisma
   return agg._sum.remainingQuantity ?? 0
 }
 
-/** On-hand batches sent to a Full inbound. */
+/** On-hand batches sent to a Full inbound, or placed in Full directly. */
 const IN_FULL_WHERE = {
   status: { in: ON_HAND_STATUSES },
-  fullShipmentId: { not: null },
+  OR: [{ fullShipmentId: { not: null } }, { placedInFull: true }],
+} satisfies Prisma.InventoryBatchWhereInput
+
+/** On-hand batches still at the local depot — what a Full box can take. */
+export const AT_DEPOT_WHERE = {
+  status: { in: ON_HAND_STATUSES },
+  fullShipmentId: null,
+  placedInFull: false,
 } satisfies Prisma.InventoryBatchWhereInput
 
 /** Sum of remaining quantity a product has sitting in Full. */
@@ -435,6 +442,8 @@ export async function applyStockWithCost(
     quantity: number
     unitCostUsd: number
     status: BatchStatus
+    /** Already in a Full warehouse — only meaningful for an on-hand status. */
+    placedInFull?: boolean
     receivedAt: Date
     note?: string
   }
@@ -447,6 +456,7 @@ export async function applyStockWithCost(
       goodsUnitCostUsd: params.unitCostUsd,
       unitCostUsd: params.unitCostUsd,
       status: params.status,
+      placedInFull: params.placedInFull ?? false,
       purchasedAt: params.receivedAt,
     },
   })

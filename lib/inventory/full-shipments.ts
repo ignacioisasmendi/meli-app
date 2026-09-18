@@ -2,7 +2,7 @@ import 'server-only'
 import { format } from 'date-fns'
 import { Prisma, FullShipmentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { ON_HAND_STATUSES } from '@/lib/inventory/stock'
+import { AT_DEPOT_WHERE } from '@/lib/inventory/stock'
 import { splitBatch } from '@/lib/inventory/split'
 import { getItem, searchFulfillmentOperations } from '@/lib/mercadolibre/client'
 import { sendTelegramMessage } from '@/lib/telegram/client'
@@ -131,8 +131,7 @@ function receivedBatches(client: Tx | typeof prisma, productIds?: string[]) {
   return client.inventoryBatch.findMany({
     where: {
       ...(productIds ? { productId: { in: productIds } } : {}),
-      status: { in: ON_HAND_STATUSES },
-      fullShipmentId: null,
+      ...AT_DEPOT_WHERE,
       remainingQuantity: { gt: 0 },
     },
     orderBy: { purchasedAt: 'asc' },
@@ -181,7 +180,7 @@ export interface ReceivedProduct {
 /** Received stock per product — what a Full box can be filled from. */
 export async function listReceivedStock(): Promise<ReceivedProduct[]> {
   const batches = await prisma.inventoryBatch.findMany({
-    where: { status: { in: ON_HAND_STATUSES }, fullShipmentId: null, remainingQuantity: { gt: 0 } },
+    where: { ...AT_DEPOT_WHERE, remainingQuantity: { gt: 0 } },
     select: {
       remainingQuantity: true,
       product: { select: { id: true, name: true, sku: true, imageUrl: true } },

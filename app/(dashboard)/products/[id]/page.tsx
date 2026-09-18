@@ -18,9 +18,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatDateTime, formatUsd } from '@/lib/utils'
-import { getInFull, getInTransit, stockViewFrom } from '@/lib/inventory/stock'
+import { ON_HAND_STATUSES, getInFull, getInTransit, stockViewFrom } from '@/lib/inventory/stock'
 import { StatusBadge } from '@/components/dashboard/status-badge'
 import { BatchStatusSelect } from '@/components/inventory/batch-status-select'
+import { BatchFullToggle } from '@/components/inventory/batch-full-toggle'
 
 export const dynamic = 'force-dynamic'
 
@@ -152,9 +153,23 @@ export default async function ProductDetailPage({
                     <TableCell>
                       {/* Stock loaded without a purchase has nothing else driving its status. */}
                       {!b.purchaseId && !b.shipmentId && !b.fullShipmentId ? (
-                        <BatchStatusSelect batchId={b.id} status={b.status} />
+                        <BatchStatusSelect
+                          batchId={b.id}
+                          status={b.placedInFull ? 'FULL' : b.status}
+                        />
                       ) : (
-                        <StatusBadge status={b.status} />
+                        <div className="flex items-center gap-1">
+                          <StatusBadge
+                            status={
+                              ON_HAND_STATUSES.includes(b.status) && (b.fullShipmentId || b.placedInFull)
+                                ? 'FULL'
+                                : b.status
+                            }
+                          />
+                          {ON_HAND_STATUSES.includes(b.status) && !b.fullShipmentId && (
+                            <BatchFullToggle batchId={b.id} inFull={b.placedInFull} />
+                          )}
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>

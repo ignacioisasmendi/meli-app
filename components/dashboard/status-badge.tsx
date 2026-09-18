@@ -10,6 +10,8 @@ const STATUS_STYLES: Record<string, string> = {
   CUSTOMS: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
   WAREHOUSE: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300',
   AVAILABLE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+  // A batch on hand inside a Full warehouse.
+  FULL: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-300',
   // Sale statuses.
   CONFIRMED: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
   CANCELLED: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
