@@ -716,5 +716,16 @@
     "clear": "Borrar",
     "saved": "Llegada estimada guardada",
     "cleared": "Llegada estimada borrada"
+  },
+  "RelinkPurchase": {
+    "trigger": "Vincular a otro producto",
+    "title": "Vincular a otro producto",
+    "description": "{count, plural, one {# unidad} other {# unidades}} hoy en {name} ({sku}). Sus lotes y su stock se mueven con ella.",
+    "search": "Buscar por nombre o SKU…",
+    "noMatches": "Ningún producto coincide",
+    "archiveEmptied": "Archivar \"{name}\" si queda sin compras, stock, ventas ni publicaciones",
+    "hint": "Solo se puede mientras ninguna de estas unidades se haya vendido ni enviado a Full.",
+    "submit": "Vincular",
+    "done": "Compra vinculada"
   }
 }

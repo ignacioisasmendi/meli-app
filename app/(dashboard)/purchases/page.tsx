@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { ArrivalDialog } from '@/components/purchases/arrival-dialog'
 import { EstimatedArrival } from '@/components/purchases/estimated-arrival'
+import { RelinkPurchaseDialog } from '@/components/purchases/relink-purchase-dialog'
 import { PurchaseFormDialog } from '@/components/purchases/purchase-form-dialog'
 import { PurchaseStatusSelect } from '@/components/purchases/purchase-status-select'
 import { Button } from '@/components/ui/button'
@@ -114,12 +115,20 @@ export default async function PurchasesPage() {
                   </span>
                 </TableCell>
                 <TableCell className="font-medium">
-                  <Link
-                    href={`/products/${line.product.id}`}
-                    className="hover:underline underline-offset-2"
-                  >
-                    {line.product.name}
-                  </Link>
+                  <div className="flex items-center gap-1">
+                    <Link
+                      href={`/products/${line.product.id}`}
+                      className="hover:underline underline-offset-2"
+                    >
+                      {line.product.name}
+                    </Link>
+                    <RelinkPurchaseDialog
+                      purchaseId={line.id}
+                      currentProduct={line.product}
+                      quantity={line.quantity}
+                      products={products}
+                    />
+                  </div>
                   <span className="block font-mono text-xs font-normal text-muted-foreground">
                     {line.product.sku}
                   </span>

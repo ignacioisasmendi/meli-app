@@ -716,5 +716,16 @@
     "clear": "Clear",
     "saved": "Estimated arrival saved",
     "cleared": "Estimated arrival cleared"
+  },
+  "RelinkPurchase": {
+    "trigger": "Link to another product",
+    "title": "Link to another product",
+    "description": "{count, plural, one {# unit} other {# units}} currently on {name} ({sku}). Its batches and stock move with it.",
+    "search": "Search by name or SKU…",
+    "noMatches": "No products match",
+    "archiveEmptied": "Archive \"{name}\" if it's left with no purchases, stock, sales or listings",
+    "hint": "Only possible while none of these units were sold or sent to Full.",
+    "submit": "Link",
+    "done": "Purchase linked"
   }
 }

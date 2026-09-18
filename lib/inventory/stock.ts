@@ -482,3 +482,84 @@ export async function applyStockWithCost(
   await recomputeAverageCost(tx, params.productId)
   return batch
 }
+
+/**
+ * Re-points a purchase — and every batch it produced — at another product, for
+ * a line that was imported onto the wrong one (typically a duplicate created
+ * because the name didn't match). Counters end up exactly as if the
+ * import had been mapped right the first time; the movement log keeps the
+ * original entry and records the move as a −/+ PURCHASE pair, so the history
+ * stays honest and a purchase already split by a partial arrival moves just
+ * its own units.
+ *
+ * Only while none of its units have left their batches: once FIFO consumed one,
+ * a sale of the old product is costed from it and moving the batch would leave
+ * that sale pointing at another product's stock. Batches in a Full box are
+ * refused too — the box was declared to ML against the old product's listing.
+ */
+export async function movePurchaseToProduct(
+  tx: Tx,
+  params: { purchaseId: string; toProductId: string }
+): Promise<{ fromProductId: string; quantity: number }> {
+  const purchase = await tx.purchase.findUniqueOrThrow({
+    where: { id: params.purchaseId },
+    include: { batches: { include: { _count: { select: { saleConsumptions: true } } } } },
+  })
+  const fromProductId = purchase.productId
+  if (fromProductId === params.toProductId) {
+    throw new Error('The purchase is already linked to that product')
+  }
+  for (const batch of purchase.batches) {
+    if (batch.remainingQuantity !== batch.quantity || batch._count.saleConsumptions > 0) {
+      throw new Error('Units of this purchase were already sold — it can no longer be moved')
+    }
+    if (batch.fullShipmentId) {
+      throw new Error('Units of this purchase were sent to Full — it can no longer be moved')
+    }
+  }
+
+  const quantity = purchase.quantity
+  await tx.purchase.update({
+    where: { id: purchase.id },
+    data: { productId: params.toProductId },
+  })
+  await tx.inventoryBatch.updateMany({
+    where: { purchaseId: purchase.id },
+    data: { productId: params.toProductId },
+  })
+  await tx.product.update({
+    where: { id: fromProductId },
+    data: {
+      totalPurchased: { decrement: quantity },
+      currentStock: { decrement: quantity },
+    },
+  })
+  await tx.product.update({
+    where: { id: params.toProductId },
+    data: {
+      totalPurchased: { increment: quantity },
+      currentStock: { increment: quantity },
+    },
+  })
+  const note = 'Purchase relinked to another product'
+  await recordMovement(tx, {
+    productId: fromProductId,
+    type: MovementType.PURCHASE,
+    quantity: -quantity,
+    referenceType: 'purchase',
+    referenceId: purchase.id,
+    note,
+  })
+  await recordMovement(tx, {
+    productId: params.toProductId,
+    type: MovementType.PURCHASE,
+    quantity,
+    referenceType: 'purchase',
+    referenceId: purchase.id,
+    note,
+  })
+  await recomputeAverageCost(tx, fromProductId)
+  await recomputeAverageCost(tx, params.toProductId)
+
+  return { fromProductId, quantity }
+}

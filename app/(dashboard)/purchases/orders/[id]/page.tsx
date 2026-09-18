@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { ArrivalDialog } from '@/components/purchases/arrival-dialog'
 import { EstimatedArrival } from '@/components/purchases/estimated-arrival'
+import { RelinkPurchaseDialog } from '@/components/purchases/relink-purchase-dialog'
 import { OrderStatusSelect } from '@/components/purchases/order-status-select'
 import { PurchaseStatusSelect } from '@/components/purchases/purchase-status-select'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { prisma } from '@/lib/prisma'
 import { formatDate, formatUsd } from '@/lib/utils'
 import { getPurchaseOrder, lineCosts, summarizeOrder } from '@/lib/purchases'
 
@@ -39,7 +41,14 @@ function Operator({ children }: { children: React.ReactNode }) {
 export default async function PurchaseOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const t = await getTranslations('PurchaseOrder')
   const { id } = await params
-  const order = await getPurchaseOrder(id)
+  const [order, products] = await Promise.all([
+    getPurchaseOrder(id),
+    prisma.product.findMany({
+      where: { archived: false },
+      select: { id: true, name: true, sku: true },
+      orderBy: { name: 'asc' },
+    }),
+  ])
   if (!order) notFound()
 
   const summary = summarizeOrder(order.purchases)
@@ -125,6 +134,12 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                     <span className="ml-2 font-mono text-xs text-muted-foreground">
                       {line.product.sku}
                     </span>
+                    <RelinkPurchaseDialog
+                      purchaseId={line.id}
+                      currentProduct={line.product}
+                      quantity={line.quantity}
+                      products={products}
+                    />
                   </TableCell>
                   <TableCell>
                     <ArrivalDialog

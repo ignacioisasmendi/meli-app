@@ -5,7 +5,13 @@ import { z } from 'zod'
 import { BatchStatus, PurchaseStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/session'
-import { applyPurchase, recomputeAverageCost, statusOnArrival } from '@/lib/inventory/stock'
+import {
+  applyPurchase,
+  movePurchaseToProduct,
+  recomputeAverageCost,
+  statusOnArrival,
+} from '@/lib/inventory/stock'
+import { checkLowStock } from '@/lib/inventory/alerts'
 import { purchaseSplitBlocker, splitPurchase } from '@/lib/inventory/split'
 import { sendTelegramMessage } from '@/lib/telegram/client'
 import { purchaseRegisteredMessage } from '@/lib/telegram/messages'
@@ -157,6 +163,75 @@ export async function updateOrderStatus(
   for (const productId of new Set(lines.map((l) => l.productId))) {
     revalidatePath(`/products/${productId}`)
   }
+  return { ok: true }
+}
+
+const relinkSchema = z.object({
+  purchaseId: z.string().min(1),
+  productId: z.string().min(1, 'Pick a product'),
+  /** Archive the product the purchase leaves, if that leaves it with nothing at all. */
+  archiveEmptied: z.boolean().default(true),
+})
+
+/**
+ * Links a purchase to a different product, carrying its batches and stock with
+ * it (see `movePurchaseToProduct`). The usual case is an import that created a
+ * duplicate product: with `archiveEmptied` that duplicate is archived once no
+ * purchase, batch, sale or listing references it any more.
+ */
+export async function relinkPurchase(input: z.input<typeof relinkSchema>): Promise<ActionResult> {
+  await requireUser()
+  const parsed = relinkSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+  const { purchaseId, productId, archiveEmptied } = parsed.data
+
+  const target = await prisma.product.findUnique({ where: { id: productId } })
+  if (!target) return { ok: false, error: 'Product not found' }
+
+  let fromProductId: string
+  let archived = false
+  try {
+    ;({ fromProductId, archived } = await prisma.$transaction(async (tx) => {
+      const moved = await movePurchaseToProduct(tx, { purchaseId, toProductId: productId })
+      if (!archiveEmptied) return { ...moved, archived: false }
+
+      const left = await tx.product.findUniqueOrThrow({
+        where: { id: moved.fromProductId },
+        select: {
+          currentStock: true,
+          _count: { select: { purchases: true, batches: true, sales: true, listings: true } },
+        },
+      })
+      const { purchases, batches, sales, listings } = left._count
+      const empty =
+        left.currentStock === 0 && purchases + batches + sales + listings === 0
+      if (empty) {
+        await tx.product.update({ where: { id: moved.fromProductId }, data: { archived: true } })
+      }
+      return { ...moved, archived: empty }
+    }))
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Could not move the purchase' }
+  }
+
+  await checkLowStock(productId)
+  if (!archived) await checkLowStock(fromProductId)
+
+  const purchase = await prisma.purchase.findUnique({
+    where: { id: purchaseId },
+    select: { orderId: true, batches: { select: { shipmentId: true } } },
+  })
+  revalidatePath('/purchases')
+  if (purchase?.orderId) revalidatePath(`/purchases/orders/${purchase.orderId}`)
+  for (const b of purchase?.batches ?? []) {
+    if (b.shipmentId) revalidatePath(`/shipments/${b.shipmentId}`)
+  }
+  revalidatePath('/inventory')
+  revalidatePath('/products')
+  revalidatePath(`/products/${productId}`)
+  revalidatePath(`/products/${fromProductId}`)
   return { ok: true }
 }
 
