@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatDateTime, formatUsd } from '@/lib/utils'
-import { getInTransit, stockViewFrom } from '@/lib/inventory/stock'
+import { getInFull, getInTransit, stockViewFrom } from '@/lib/inventory/stock'
 import { StatusBadge } from '@/components/dashboard/status-badge'
 
 export const dynamic = 'force-dynamic'
@@ -45,14 +45,20 @@ export default async function ProductDetailPage({
   })
   if (!product) notFound()
 
-  const view = stockViewFrom(product, await getInTransit(product.id))
+  const [inTransit, inFull] = await Promise.all([
+    getInTransit(product.id),
+    getInFull(product.id),
+  ])
+  const view = stockViewFrom(product, inTransit, inFull)
   const stats = [
-    STAT(t('available'), view.available),
     STAT(t('inTransit'), view.inTransit),
+    STAT(t('received'), view.received),
+    STAT(t('full'), view.full),
     STAT(t('reserved'), view.reserved),
     STAT(t('totalPurchased'), product.totalPurchased),
     STAT(t('totalSold'), product.totalSold),
     STAT(t('avgCost'), formatUsd(product.averageCostUsd)),
+    STAT(t('weight'), product.weightGrams != null ? `${product.weightGrams} g` : '—'),
   ]
 
   return (
@@ -81,7 +87,7 @@ export default async function ProductDetailPage({
         }
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {stats.map((s) => (
           <Card key={s.label}>
             <CardContent className="pt-6">

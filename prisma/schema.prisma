@@ -77,6 +77,15 @@ enum SaleStatus {
   REFUNDED
 }
 
+/// Which pipeline booked a sale. Both run the same stock/profit code; the source
+/// is kept so the two can be compared while the report import is being trusted.
+///   WEBHOOK — ML notified an order and `processOrder` read it from the API.
+///   REPORT  — booked from a row of ML's downloadable sales report.
+enum SaleSource {
+  WEBHOOK
+  REPORT
+}
+
 enum WebhookStatus {
   RECEIVED
   PROCESSED
@@ -132,6 +141,7 @@ model MercadoLibreAccount {
   sales         Sale[]
   listings      MlListing[]
   fullShipments FullShipment[]
+  salesReports  SalesReport[]
 
   @@map("mercadolibre_accounts")
 }
@@ -234,6 +244,10 @@ model Purchase {
   invoiceUrl   String?
   status       PurchaseStatus @default(PURCHASED)
   purchasedAt  DateTime       @default(now())
+  /// When the goods physically arrived. Goods from one order don't always land
+  /// together, so a partial arrival splits the line (see `registerArrival`):
+  /// every row carries a single date, never "some of it on each".
+  arrivedAt    DateTime?
   createdAt    DateTime       @default(now())
 
   batches InventoryBatch[]
@@ -253,32 +267,39 @@ model Purchase {
 /// `unitCostUsd` stays the figure FIFO and profit math read, so the same batch
 /// of a product can carry a different landed cost in every shipment.
 model InventoryBatch {
-  id                 String      @id @default(cuid())
+  id                 String        @id @default(cuid())
   productId          String
-  product            Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product            Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   purchaseId         String?
-  purchase           Purchase?   @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  purchase           Purchase?     @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
   shipmentId         String?
-  shipment           Shipment?   @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipment           Shipment?     @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  /// The Full inbound these units left the local depot in. Set per batch, not
+  /// per shipment, because a Full box takes whatever quantity of each product
+  /// is going — so `allocateToFull` splits a batch when only part of it goes,
+  /// and `quantity` on a Full batch is exactly the units sent.
+  fullShipmentId     String?
+  fullShipment       FullShipment? @relation(fields: [fullShipmentId], references: [id], onDelete: SetNull)
   quantity           Int
   remainingQuantity  Int
   /// Supplier price + that line's share of the supplier's own tax/shipping.
-  goodsUnitCostUsd   Float       @default(0)
+  goodsUnitCostUsd   Float         @default(0)
   /// This unit's share of the USA → Argentina freight bill.
-  freightUnitCostUsd Float       @default(0)
+  freightUnitCostUsd Float         @default(0)
   /// Landed cost = goods + freight. What FIFO consumes.
   unitCostUsd        Float
   /// True while `freightUnitCostUsd` comes from a shipment estimate rather
   /// than the actual courier bill.
-  freightIsEstimate  Boolean     @default(false)
-  status             BatchStatus @default(PURCHASED)
-  purchasedAt        DateTime    @default(now())
+  freightIsEstimate  Boolean       @default(false)
+  status             BatchStatus   @default(PURCHASED)
+  purchasedAt        DateTime      @default(now())
 
   saleConsumptions SaleBatchConsumption[]
 
   @@index([productId])
   @@index([status])
   @@index([shipmentId])
+  @@index([fullShipmentId])
   @@map("inventory_batches")
 }
 
@@ -312,20 +333,14 @@ model Shipment {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  /// The Full inbound this shipment's stock was consolidated into, once it
-  /// physically left the local depot for Mercado Libre's warehouse.
-  fullShipmentId String?
-  fullShipment   FullShipment? @relation(fields: [fullShipmentId], references: [id], onDelete: SetNull)
-
   batches InventoryBatch[]
 
   @@index([status])
-  @@index([fullShipmentId])
   @@map("shipments")
 }
 
-/// A physical box consolidating one or more already-landed `Shipment`s and
-/// sent on to a Mercado Libre Full warehouse. There is no API to create the
+/// A physical box of received stock sent on to a Mercado Libre Full warehouse,
+/// built product by product from what is on hand at the local depot. There is no API to create the
 /// inbound request itself — that happens by hand in ML's seller panel, which
 /// hands back `mlInboundId`. `syncFullShipmentReceptions` (run on a cron)
 /// polls `/stock/fulfillment/operations/search` for an INBOUND_RECEPTION
@@ -344,7 +359,7 @@ model FullShipment {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
-  shipments Shipment[]
+  batches InventoryBatch[]
 
   @@unique([accountId, mlInboundId])
   @@index([status])
@@ -387,38 +402,39 @@ model MlListing {
 /// `SUM(profitUsd) - SUM(reversedProfitUsd)`, so adding a reversal never means
 /// re-reading rows to correct them. See `netRevenueArs` in `lib/inventory/returns.ts`.
 model Sale {
-  id           String              @id @default(cuid())
-  mlOrderId    String              @unique
+  id             String              @id @default(cuid())
+  mlOrderId      String              @unique
   /// The number ML shows the seller as "Venta #": the pack id when the buyer
   /// checked out a cart (one pack, several orders), the order id otherwise.
-  saleNumber   String
-  accountId    String
-  account      MercadoLibreAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  productId    String
-  product      Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
-  quantity     Int
-  salePriceArs Float
+  saleNumber     String
+  accountId      String
+  account        MercadoLibreAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity       Int
+  salePriceArs   Float
   /// The payout breakdown, read from the Mercado Pago payment's
   /// `charges_details` rather than the order: the order only knows the ML fee,
   /// its `shipping_cost` is what the BUYER paid, and it has no taxes at all.
   /// ML's selling fee.
-  feeArs       Float               @default(0)
+  feeArs         Float               @default(0)
   /// Shipping charged to the seller, not what the buyer paid.
-  shippingArs  Float               @default(0)
+  shippingArs    Float               @default(0)
   /// Taxes withheld by Mercado Pago (e.g. the IIBB retention).
-  taxArs       Float               @default(0)
+  taxArs         Float               @default(0)
   /// What actually lands in the account: `net_received_amount`. Stored as ML
   /// reports it, not derived, because a payment can carry charge types beyond
   /// fee/shipping/tax. `profitUsd` is computed from this.
-  netReceivedArs Float             @default(0)
-  profitUsd    Float               @default(0)
+  netReceivedArs Float               @default(0)
+  profitUsd      Float               @default(0)
   /// FIFO cost of goods sold, as `applySale` valued it at sale time. Stored
   /// because it can't be recovered later: batches get re-costed and the USD/ARS
   /// rate moves, so a refund-without-return months on would otherwise have to
   /// guess what these units cost.
-  costUsd      Float               @default(0)
-  soldAt       DateTime
-  createdAt    DateTime            @default(now())
+  costUsd        Float               @default(0)
+  soldAt         DateTime
+  createdAt      DateTime            @default(now())
+  source         SaleSource          @default(WEBHOOK)
 
   status            SaleStatus @default(CONFIRMED)
   /// Units reversed so far. Less than `quantity` on a partial return.
@@ -445,6 +461,63 @@ model Sale {
   @@index([mlClaimId])
   @@index([saleNumber])
   @@map("sales")
+}
+
+/// One upload of ML's sales report ("Ventas" → Descargar Excel/CSV) for an
+/// account. Rows are kept rather than applied on upload, so the report can be
+/// compared against what the webhook pipeline booked before anything changes —
+/// the comparison itself is computed on read, against the live sales table.
+model SalesReport {
+  id          String              @id @default(cuid())
+  accountId   String
+  account     MercadoLibreAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  fileName    String
+  /// "Estado de tus ventas al …" — the moment the report reflects.
+  generatedAt DateTime?
+  rowCount    Int
+  uploadedAt  DateTime            @default(now())
+
+  rows SalesReportRow[]
+
+  @@index([accountId])
+  @@map("sales_reports")
+}
+
+/// A line of the report, trimmed to what reconciliation needs (no DNI or
+/// addresses). Money is as ML prints it: charges and refunds are negative.
+model SalesReportRow {
+  id                String      @id @default(cuid())
+  reportId          String
+  report            SalesReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  rowNumber         Int
+  saleNumber        String
+  soldAt            DateTime
+  status            String
+  statusDetail      String?
+  quantity          Int
+  unitPriceArs      Float?
+  productRevenueArs Float
+  feeArs            Float
+  taxArs            Float
+  shippingIncomeArs Float
+  shippingCostArs   Float
+  otherChargesArs   Float
+  refundsArs        Float
+  totalArs          Float
+  mlItemId          String?
+  title             String?
+  variant           String?
+  sku               String?
+  buyerName         String?
+  returnResult      String?
+  /// Last time "apply" acted on this row, and what it did — an audit trail, not
+  /// a guard: reconciliation re-derives what's left to do from the sales table.
+  appliedAt         DateTime?
+  applyNote         String?
+
+  @@index([reportId])
+  @@index([saleNumber])
+  @@map("sales_report_rows")
 }
 
 /// Which batches a sale actually consumed, and at what landed cost.

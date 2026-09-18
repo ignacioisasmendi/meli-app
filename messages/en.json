@@ -102,17 +102,21 @@
     "name": "Name",
     "brand": "Brand",
     "available": "Available",
-    "inTransit": "In transit",
+    "inTransit": "On the way",
     "reserved": "Reserved",
     "avgCost": "Avg cost",
     "actions": "Actions",
     "noProductsYet": "No products yet.",
     "low": "Low",
-    "editProduct": "Edit {name}"
+    "editProduct": "Edit {name}",
+    "weight": "Weight",
+    "grams": "{value} g",
+    "received": "Received",
+    "full": "Full"
   },
   "ProductDetail": {
     "available": "Available",
-    "inTransit": "In transit",
+    "inTransit": "On the way",
     "reserved": "Reserved",
     "totalPurchased": "Total purchased",
     "totalSold": "Total sold",
@@ -131,7 +135,10 @@
     "movementHistory": "Movement history",
     "when": "When",
     "type": "Type",
-    "noMovements": "No movements."
+    "noMovements": "No movements.",
+    "received": "Received",
+    "full": "Full",
+    "weight": "Weight"
   },
   "MovementType": {
     "PURCHASE": "Purchase",
@@ -161,14 +168,16 @@
     "title": "Inventory",
     "totalAvailableValue": "Total available value: {value}",
     "available": "Available",
-    "inTransit": "In transit",
+    "inTransit": "On the way",
     "reserved": "Reserved",
     "product": "Product",
     "sku": "SKU",
     "qty": "Qty",
     "valueUsd": "Value (USD)",
     "nothingHere": "Nothing here.",
-    "low": "Low"
+    "low": "Low",
+    "received": "Received",
+    "full": "Full"
   },
   "AdjustStock": {
     "adjustStock": "Adjust stock",
@@ -182,26 +191,17 @@
   },
   "Purchases": {
     "title": "Purchases",
-    "description": "One row per supplier order. Open one to see each product’s price and tax side by side.",
+    "description": "One row per purchase. A purchase that arrives in parts is split into two rows, each with its own arrival date.",
     "importOrder": "Import order",
     "date": "Date",
     "order": "Order",
-    "units": "Units",
-    "products": "Products",
-    "tax": "Tax",
-    "shipping": "Shipping",
-    "total": "Total",
-    "shipment": "Shipment",
     "status": "Status",
-    "noOrdersYet": "No orders yet. Import an Amazon order to get started.",
-    "itemCount": "{count, plural, one {# item} other {# items}}",
-    "shipmentsCount": "{count} shipments",
-    "openOrder": "Open order {orderNumber}",
-    "purchasesWithoutOrder": "Purchases without an order",
     "product": "Product",
     "qty": "Qty",
-    "unitCost": "Unit cost",
-    "supplier": "Supplier"
+    "arrivedAt": "Arrival",
+    "unitPrice": "Unit price",
+    "priceWithTax": "{price} + {tax} tax",
+    "noPurchasesYet": "No purchases yet. Import an Amazon order to get started."
   },
   "PurchaseOrder": {
     "productCount": "{count, plural, one {# product} other {# products}}",
@@ -224,7 +224,9 @@
     "taxShippingSplitNote": "The order’s {tax} tax and {shipping} shipping are split across the products by value, so each one carries its own share.",
     "noTaxShippingNote": "No tax or shipping was recorded for this order, so each product’s total is just the price paid.",
     "landedFreightNote": "Landed adds the USA → Argentina courier bill from the shipment.",
-    "freightPendingNote": "The USA → Argentina freight is added later, when the shipment is costed."
+    "freightPendingNote": "The USA → Argentina freight is added later, when the shipment is costed.",
+    "arrivedAt": "Arrival",
+    "eachWithTax": "{value} ea with tax"
   },
   "PurchaseImport": {
     "title": "Import purchases",
@@ -262,7 +264,9 @@
     "addItem": "Add item",
     "orderTotalLabel": "Order total (goods + tax + shipping):",
     "importing": "Importing…",
-    "importPurchases": "{count, plural, one {Import # purchase} other {Import # purchases}}"
+    "importPurchases": "{count, plural, one {Import # purchase} other {Import # purchases}}",
+    "arrivalDate": "Arrived at courier",
+    "perUnitWithTax": "{value}/unit with tax"
   },
   "PurchaseForm": {
     "registerPurchase": "Register purchase",
@@ -275,7 +279,9 @@
     "status": "Status",
     "purchasedAt": "Purchased at",
     "register": "Register",
-    "purchaseRegistered": "Purchase registered"
+    "purchaseRegistered": "Purchase registered",
+    "arrivedAt": "Arrival date",
+    "arrivedAtHint": "Optional. When it reached the courier in the USA."
   },
   "OrderStatusSelect": {
     "linesUpdated": "{count, plural, one {# line updated} other {# lines updated}}",
@@ -422,30 +428,35 @@
     "addedPurchases": "{count, plural, one {Added # purchase} other {Added # purchases}}",
     "addPurchases": "Add purchases",
     "addPurchasesToShipment": "Add purchases to this shipment",
-    "unassignedExplainer": "Purchases that haven’t left for Argentina in another box yet.",
+    "unassignedExplainer": "Purchases not in any shipment yet, grouped by the day they reached the courier. Each goes in whole, or enter how many units go and the rest stays as another purchase.",
     "loading": "Loading…",
     "nothingUnassigned": "Nothing unassigned — every purchase is already in a shipment.",
-    "unitsCount": "{count} units",
-    "perUnit": "{value}/unit",
     "addingEllipsis": "Adding…",
-    "addCount": "Add {count}"
+    "product": "Product",
+    "quantity": "Qty",
+    "purchasedAt": "Purchased",
+    "arrivedAt": "Arrived",
+    "going": "Going in",
+    "whole": "Whole",
+    "restStays": "{count} stay unassigned",
+    "addUnits": "{count, plural, one {Add # unit} other {Add # units}}"
   },
   "FullShipments": {
     "title": "Full Shipments",
-    "description": "Boxes consolidated and sent to a Mercado Libre Full warehouse. Status only confirms once ML reports it was received.",
+    "description": "Boxes of received stock sent to Mercado Libre’s Full warehouse, built per product. Status is confirmed automatically once ML reports them received.",
     "inboundId": "Inbound ID",
     "account": "Account",
-    "shipments": "Shipments",
     "units": "Units",
     "sent": "Sent",
     "received": "Received",
     "status": "Status",
-    "noneYet": "No Full shipments yet. Create one with the inbound ID Mercado Libre gave you in the seller panel."
+    "noneYet": "No Full shipments yet. Create one with the inbound ID Mercado Libre gave you in the seller panel.",
+    "products": "Products"
   },
   "FullShipmentForm": {
     "newFullShipment": "New Full shipment",
     "editFullShipment": "Edit Full shipment",
-    "explainer": "The Full shipment is created in Mercado Libre's seller panel, which hands back an inbound ID — paste it here and pick which already-costed shipments go inside the box.",
+    "explainer": "The Full inbound is created in Mercado Libre’s seller panel, which gives you an inbound ID — paste it here and pick how many units of each received product go in the box.",
     "account": "Account",
     "mlInboundId": "Inbound ID (Mercado Libre)",
     "mlInboundIdHint": "The ID Mercado Libre assigned when the inbound request was created in the seller panel.",
@@ -455,49 +466,27 @@
     "createFullShipment": "Create Full shipment",
     "created": "Full shipment created",
     "updated": "Full shipment updated",
-    "selectShipments": "Shipments to include",
-    "eligibleExplainer": "Already-costed shipments not yet in any box headed to Full.",
-    "loading": "Loading…",
-    "nothingEligible": "No shipments available to include yet.",
-    "couldNotLoadShipments": "Could not load shipments",
-    "unitsCount": "{count} units",
-    "summary": "Summary — check this against what you're physically shipping",
-    "noSummaryYet": "Pick shipments above to see what's going out.",
-    "product": "Product",
-    "sku": "SKU",
-    "units": "Units"
+    "selectProducts": "Products to send",
+    "receivedExplainer": "Stock received at your depot that hasn’t gone to Full. Send part of each product or all of it.",
+    "couldNotLoadStock": "Could not load received stock"
   },
   "FullShipmentDetail": {
     "status": "Status",
-    "shipments": "Shipments",
     "units": "Units",
     "sentAt": "Sent",
     "receivedAt": "Received",
     "edit": "Edit",
     "sentDescription": "On its way — only confirmed once Mercado Libre reports it arrived at the Full warehouse.",
     "receivedDescription": "Received by Mercado Libre — already in the Full warehouse.",
-    "shipmentsIncluded": "Shipments included",
-    "code": "Code",
-    "courier": "Courier",
-    "noShipmentsIncluded": "No shipments included in this box yet.",
     "whatIsGoing": "What's going in the box",
     "product": "Product",
     "sku": "SKU",
     "markReceived": "Mark received",
     "markedReceived": "Marked as received",
-    "removeShipment": "Remove from this Full shipment"
-  },
-  "AssignShipmentsToFull": {
-    "addShipments": "Add shipments",
-    "addShipmentsToFull": "Add shipments to this box",
-    "eligibleExplainer": "Already-costed shipments not yet in any box headed to Full.",
-    "loading": "Loading…",
-    "nothingEligible": "Nothing available — only already-costed shipments can be added.",
-    "couldNotLoad": "Could not load shipments",
-    "unitsCount": "{count} units",
-    "addingEllipsis": "Adding…",
-    "addCount": "Add {count}",
-    "addedShipments": "{count, plural, one {Added # shipment} other {Added # shipments}}"
+    "products": "Products",
+    "fromShipments": "From shipment",
+    "noProductsIncluded": "No products in this box yet.",
+    "removeProduct": "Remove from this Full shipment"
   },
   "Sales": {
     "title": "Sales",
@@ -599,5 +588,39 @@
     "cost": "Cost",
     "profit": "Profit",
     "margin": "Margin"
+  },
+  "Arrival": {
+    "register": "Register",
+    "title": "Register arrival at courier",
+    "editTitle": "Change arrival date",
+    "units": "{count, plural, one {# unit} other {# units}}",
+    "date": "Arrival date (USA)",
+    "quantity": "Units that arrived",
+    "hint": "When it reached the courier in the USA. If not all units arrived, enter how many: the purchase is split in two.",
+    "splitHint": "The purchase is split: {arrived} arrive on this date and {rest} stay pending as another purchase.",
+    "editHint": "Only the date changes. To register another arrival, use the purchase still pending.",
+    "saved": "Arrival registered",
+    "splitDone": "Purchase split: {arrived} arrived, {rest} pending"
+  },
+  "ReceivedStockPicker": {
+    "selected": "{units, plural, one {# unit} other {# units}} of {count, plural, one {# product} other {# products}}",
+    "sendAll": "Send all",
+    "clear": "Clear",
+    "loading": "Loading…",
+    "nothingReceived": "No received stock available to send to Full.",
+    "product": "Product",
+    "received": "Received",
+    "going": "To Full",
+    "goingFor": "Units of {name} going to Full",
+    "all": "All"
+  },
+  "AddProductsToFull": {
+    "addProducts": "Add products",
+    "addProductsToFull": "Add products to this box",
+    "explainer": "Received stock that hasn’t gone to Full. Pick how many units of each product to add.",
+    "couldNotLoad": "Could not load received stock",
+    "adding": "Adding…",
+    "add": "Add",
+    "added": "{count, plural, one {Added # product} other {Added # products}}"
   }
 }

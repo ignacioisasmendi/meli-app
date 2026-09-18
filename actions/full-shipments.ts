@@ -2,9 +2,10 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { FullShipmentStatus, ShipmentStatus } from '@prisma/client'
+import { FullShipmentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/session'
+import { allocateToFull, listReceivedStock } from '@/lib/inventory/full-shipments'
 import type { ActionResult } from '@/actions/products'
 
 const fullShipmentSchema = z.object({
@@ -14,10 +15,28 @@ const fullShipmentSchema = z.object({
   notes: z.string().trim().optional().or(z.literal('')),
 })
 
+const fullLinesSchema = z
+  .array(
+    z.object({
+      productId: z.string().min(1),
+      quantity: z.coerce.number().int().min(0, 'Quantity cannot be negative'),
+    })
+  )
+  .transform((lines) => lines.filter((l) => l.quantity > 0))
+
 function revalidateFullShipment(id?: string) {
   revalidatePath('/full-shipments')
   if (id) revalidatePath(`/full-shipments/${id}`)
-  revalidatePath('/shipments')
+  revalidatePath('/inventory')
+  revalidatePath('/products')
+}
+
+function parseLines(raw: FormDataEntryValue | null) {
+  try {
+    return fullLinesSchema.safeParse(raw ? JSON.parse(String(raw)) : [])
+  } catch {
+    return fullLinesSchema.safeParse(null)
+  }
 }
 
 export async function createFullShipment(formData: FormData): Promise<ActionResult> {
@@ -42,34 +61,28 @@ export async function createFullShipment(formData: FormData): Promise<ActionResu
   })
   if (clash) return { ok: false, error: `Inbound "${parsed.data.mlInboundId}" already exists for that account` }
 
-  // Shipments picked in the create dialog, so the packing summary you checked
-  // against the physical box is exactly what ends up assigned to it.
-  const shipmentIds = formData.getAll('shipmentIds').map(String).filter(Boolean)
-  if (shipmentIds.length > 0) {
-    const eligibleCount = await prisma.shipment.count({
-      where: { id: { in: shipmentIds }, fullShipmentId: null, status: ShipmentStatus.COSTED },
-    })
-    if (eligibleCount !== shipmentIds.length) {
-      return { ok: false, error: 'One of the selected shipments is no longer available' }
-    }
+  // Per-product quantities picked in the create dialog, taken from received
+  // stock — so the box holds exactly what you counted while packing it.
+  const lines = parseLines(formData.get('lines'))
+  if (!lines.success) {
+    return { ok: false, error: lines.error.issues[0]?.message ?? 'Invalid products' }
   }
 
-  await prisma.$transaction(async (tx) => {
-    const created = await tx.fullShipment.create({
-      data: {
-        accountId: parsed.data.accountId,
-        mlInboundId: parsed.data.mlInboundId,
-        sentAt: parsed.data.sentAt ?? new Date(),
-        notes: parsed.data.notes || null,
-      },
-    })
-    if (shipmentIds.length > 0) {
-      await tx.shipment.updateMany({
-        where: { id: { in: shipmentIds } },
-        data: { fullShipmentId: created.id },
+  try {
+    await prisma.$transaction(async (tx) => {
+      const created = await tx.fullShipment.create({
+        data: {
+          accountId: parsed.data.accountId,
+          mlInboundId: parsed.data.mlInboundId,
+          sentAt: parsed.data.sentAt ?? new Date(),
+          notes: parsed.data.notes || null,
+        },
       })
-    }
-  })
+      await allocateToFull(tx, created.id, lines.data)
+    })
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Could not create Full shipment' }
+  }
 
   revalidateFullShipment()
   return { ok: true }
@@ -142,53 +155,68 @@ export async function deleteFullShipment(id: string): Promise<ActionResult> {
     return { ok: false, error: 'A received Full shipment cannot be deleted' }
   }
 
-  // Shipments survive with `fullShipmentId: null` (onDelete: SetNull) — deleting
-  // the box must never touch the goods that were consolidated into it.
+  // Batches survive with `fullShipmentId: null` (onDelete: SetNull) — deleting
+  // the box puts its goods back into received stock.
   await prisma.fullShipment.delete({ where: { id } })
   revalidateFullShipment()
   return { ok: true }
 }
 
-/** Puts a set of shipments in (or, with `fullShipmentId: null`, out of) a Full box. */
-export async function assignShipmentsToFull(
-  shipmentIds: string[],
-  fullShipmentId: string | null
+/** Adds more received stock, per product, to a Full box that hasn't arrived. */
+export async function addProductsToFull(
+  fullShipmentId: string,
+  input: { productId: string; quantity: number }[]
 ): Promise<ActionResult> {
   await requireUser()
-  if (shipmentIds.length === 0) return { ok: false, error: 'Select at least one shipment' }
+  const lines = fullLinesSchema.safeParse(input)
+  if (!lines.success) {
+    return { ok: false, error: lines.error.issues[0]?.message ?? 'Invalid products' }
+  }
+  if (lines.data.length === 0) return { ok: false, error: 'Pick at least one product' }
 
-  if (fullShipmentId) {
-    const fullShipment = await prisma.fullShipment.findUnique({ where: { id: fullShipmentId } })
-    if (!fullShipment) return { ok: false, error: 'Full shipment not found' }
-    if (fullShipment.status === FullShipmentStatus.RECEIVED) {
-      return { ok: false, error: 'That Full shipment was already received — nothing left to add' }
-    }
+  const fullShipment = await prisma.fullShipment.findUnique({ where: { id: fullShipmentId } })
+  if (!fullShipment) return { ok: false, error: 'Full shipment not found' }
+  if (fullShipment.status === FullShipmentStatus.RECEIVED) {
+    return { ok: false, error: 'That Full shipment was already received — nothing left to add' }
   }
 
-  await prisma.shipment.updateMany({
-    where: { id: { in: shipmentIds } },
-    data: { fullShipmentId },
-  })
+  try {
+    await prisma.$transaction((tx) => allocateToFull(tx, fullShipmentId, lines.data))
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Could not add products' }
+  }
 
-  revalidateFullShipment(fullShipmentId ?? undefined)
+  revalidateFullShipment(fullShipmentId)
   return { ok: true }
 }
 
 /**
- * Landed shipments not yet consolidated into a Full box — the pool the picker
- * draws from. Only COSTED shipments qualify: their units are the ones actually
- * sellable, with a real landed cost, so that's what should be going to Full.
+ * Takes a product back out of a Full box that hasn't arrived: its batches return
+ * to received stock. Batches split when they went in stay split — harmless, as
+ * both halves carry the same cost.
  */
-export async function getShipmentsEligibleForFull() {
+export async function removeProductFromFull(
+  fullShipmentId: string,
+  productId: string
+): Promise<ActionResult> {
   await requireUser()
-  return prisma.shipment.findMany({
-    where: { fullShipmentId: null, status: ShipmentStatus.COSTED },
-    include: {
-      batches: {
-        include: { product: { select: { id: true, name: true, sku: true } } },
-      },
-    },
-    orderBy: { costedAt: 'desc' },
-    take: 200,
+  const fullShipment = await prisma.fullShipment.findUnique({ where: { id: fullShipmentId } })
+  if (!fullShipment) return { ok: false, error: 'Full shipment not found' }
+  if (fullShipment.status === FullShipmentStatus.RECEIVED) {
+    return { ok: false, error: 'A received Full shipment cannot be changed' }
+  }
+
+  await prisma.inventoryBatch.updateMany({
+    where: { fullShipmentId, productId },
+    data: { fullShipmentId: null },
   })
+
+  revalidateFullShipment(fullShipmentId)
+  return { ok: true }
+}
+
+/** Received stock per product — the pool the Full pickers draw from. */
+export async function getReceivedStockForFull() {
+  await requireUser()
+  return listReceivedStock()
 }

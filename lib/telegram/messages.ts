@@ -167,14 +167,15 @@ export function shipmentCostedMessage(params: {
 export function fullShipmentReceivedMessage(params: {
   mlInboundId: string
   accountNickname: string
-  shipmentCount: number
+  productCount: number
+  units: number
 }): string {
   return [
     '🏬 *Full Shipment Received*',
     '',
     `*Inbound ID:* ${params.mlInboundId}`,
     `*Account:* ${params.accountNickname}`,
-    `*Shipments inside:* ${params.shipmentCount}`,
+    `*Inside:* ${params.units} units of ${params.productCount} product(s)`,
   ].join('\n')
 }
 

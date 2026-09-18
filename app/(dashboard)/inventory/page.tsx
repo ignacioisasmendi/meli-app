@@ -15,7 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatUsd } from '@/lib/utils'
-import { getInTransit, stockViewFrom, type StockView } from '@/lib/inventory/stock'
+import { getBatchLocations, stockViewFrom, type StockView } from '@/lib/inventory/stock'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,7 +53,7 @@ function InventoryTable({ rows, column }: { rows: Row[]; column: keyof StockView
           )}
           {filtered.map((r) => {
             const qty = r.view[column]
-            const low = column === 'available' && qty <= r.minStock
+            const low = (column === 'received' || column === 'full') && r.view.available <= r.minStock
             return (
               <TableRow key={r.id}>
                 <TableCell className="font-medium">{r.name}</TableCell>
@@ -87,16 +87,18 @@ export default async function InventoryPage() {
     where: { archived: false },
     orderBy: { name: 'asc' },
   })
-  const rows: Row[] = await Promise.all(
-    products.map(async (p) => ({
+  const locations = await getBatchLocations(products.map((p) => p.id))
+  const rows: Row[] = products.map((p) => {
+    const { inTransit, inFull } = locations.get(p.id)!
+    return {
       id: p.id,
       name: p.name,
       sku: p.sku,
       minStock: p.minStock,
       averageCostUsd: p.averageCostUsd,
-      view: stockViewFrom(p, await getInTransit(p.id)),
-    }))
-  )
+      view: stockViewFrom(p, inTransit, inFull),
+    }
+  })
 
   const totalValue = rows.reduce((s, r) => s + r.view.available * r.averageCostUsd, 0)
 
@@ -107,17 +109,21 @@ export default async function InventoryPage() {
         description={t('totalAvailableValue', { value: formatUsd(totalValue) })}
       />
 
-      <Tabs defaultValue="available">
+      <Tabs defaultValue="received">
         <TabsList>
-          <TabsTrigger value="available">{t('available')}</TabsTrigger>
           <TabsTrigger value="inTransit">{t('inTransit')}</TabsTrigger>
+          <TabsTrigger value="received">{t('received')}</TabsTrigger>
+          <TabsTrigger value="full">{t('full')}</TabsTrigger>
           <TabsTrigger value="reserved">{t('reserved')}</TabsTrigger>
         </TabsList>
-        <TabsContent value="available" className="mt-4">
-          <InventoryTable rows={rows} column="available" />
-        </TabsContent>
         <TabsContent value="inTransit" className="mt-4">
           <InventoryTable rows={rows} column="inTransit" />
+        </TabsContent>
+        <TabsContent value="received" className="mt-4">
+          <InventoryTable rows={rows} column="received" />
+        </TabsContent>
+        <TabsContent value="full" className="mt-4">
+          <InventoryTable rows={rows} column="full" />
         </TabsContent>
         <TabsContent value="reserved" className="mt-4">
           <InventoryTable rows={rows} column="reserved" />

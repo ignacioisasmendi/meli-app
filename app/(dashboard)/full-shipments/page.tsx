@@ -24,7 +24,7 @@ export default async function FullShipmentsPage() {
     prisma.fullShipment.findMany({
       include: {
         account: { select: { nickname: true } },
-        shipments: { include: { batches: { select: { quantity: true } } } },
+        batches: { select: { quantity: true, productId: true } },
       },
       orderBy: [{ status: 'asc' }, { sentAt: 'desc' }],
       take: 100,
@@ -50,7 +50,7 @@ export default async function FullShipmentsPage() {
             <TableRow>
               <TableHead>{t('inboundId')}</TableHead>
               <TableHead>{t('account')}</TableHead>
-              <TableHead className="text-right">{t('shipments')}</TableHead>
+              <TableHead className="text-right">{t('products')}</TableHead>
               <TableHead className="text-right">{t('units')}</TableHead>
               <TableHead>{t('sent')}</TableHead>
               <TableHead>{t('received')}</TableHead>
@@ -66,10 +66,8 @@ export default async function FullShipmentsPage() {
               </TableRow>
             )}
             {fullShipments.map((fs) => {
-              const units = fs.shipments.reduce(
-                (n, s) => n + s.batches.reduce((m, b) => m + b.quantity, 0),
-                0
-              )
+              const units = fs.batches.reduce((n, b) => n + b.quantity, 0)
+              const productCount = new Set(fs.batches.map((b) => b.productId)).size
               return (
                 <TableRow key={fs.id}>
                   <TableCell className="font-medium">
@@ -81,7 +79,7 @@ export default async function FullShipmentsPage() {
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{fs.account.nickname}</TableCell>
-                  <TableCell className="text-right">{fs.shipments.length}</TableCell>
+                  <TableCell className="text-right">{productCount}</TableCell>
                   <TableCell className="text-right">{units}</TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(fs.sentAt)}</TableCell>
                   <TableCell className="text-muted-foreground">

@@ -1,7 +1,7 @@
 /**
- * Pure aggregation, deliberately without `server-only` — it also runs client-side
- * in the create dialog, so you can check the product/quantity summary against
- * what you're physically packing before the Full shipment is even created.
+ * Pure aggregation, deliberately without `server-only` — it also runs client-side,
+ * so the per-product summary can be checked against what you're physically
+ * packing.
  */
 
 export interface FullShipmentProductLine {
@@ -9,28 +9,34 @@ export interface FullShipmentProductLine {
   productName: string
   sku: string
   quantity: number
+  /** Shipments the units originally landed in, for tracing a box back. */
+  shipments: { id: string; code: string }[]
 }
 
-interface LineSource {
-  batches: Array<{ quantity: number; product: { id: string; name: string; sku: string } }>
+interface BatchSource {
+  quantity: number
+  product: { id: string; name: string; sku: string }
+  shipment?: { id: string; code: string } | null
 }
 
-/** Per-product totals across a set of `Shipment`s consolidated into one box. */
-export function aggregateFullShipmentLines(shipments: LineSource[]): FullShipmentProductLine[] {
+/** Per-product totals across the batches that went into one Full box. */
+export function aggregateFullShipmentLines(batches: BatchSource[]): FullShipmentProductLine[] {
   const byProduct = new Map<string, FullShipmentProductLine>()
-  for (const shipment of shipments) {
-    for (const batch of shipment.batches) {
-      const existing = byProduct.get(batch.product.id)
-      if (existing) {
-        existing.quantity += batch.quantity
-      } else {
-        byProduct.set(batch.product.id, {
-          productId: batch.product.id,
-          productName: batch.product.name,
-          sku: batch.product.sku,
-          quantity: batch.quantity,
-        })
+  for (const batch of batches) {
+    let line = byProduct.get(batch.product.id)
+    if (!line) {
+      line = {
+        productId: batch.product.id,
+        productName: batch.product.name,
+        sku: batch.product.sku,
+        quantity: 0,
+        shipments: [],
       }
+      byProduct.set(batch.product.id, line)
+    }
+    line.quantity += batch.quantity
+    if (batch.shipment && !line.shipments.some((s) => s.id === batch.shipment!.id)) {
+      line.shipments.push(batch.shipment)
     }
   }
   return [...byProduct.values()].sort((a, b) => a.productName.localeCompare(b.productName))

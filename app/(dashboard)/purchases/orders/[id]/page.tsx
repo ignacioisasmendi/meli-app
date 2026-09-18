@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { ArrowLeft } from 'lucide-react'
 import { PageHeader } from '@/components/dashboard/page-header'
+import { ArrivalDialog } from '@/components/purchases/arrival-dialog'
 import { OrderStatusSelect } from '@/components/purchases/order-status-select'
 import { PurchaseStatusSelect } from '@/components/purchases/purchase-status-select'
 import { Button } from '@/components/ui/button'
@@ -95,6 +96,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
           <TableHeader>
             <TableRow>
               <TableHead>{t('product')}</TableHead>
+              <TableHead>{t('arrivedAt')}</TableHead>
               <TableHead className="text-right">{t('qty')}</TableHead>
               <TableHead className="text-right">{t('productPrice')}</TableHead>
               <TableHead className="text-right">{t('tax')}</TableHead>
@@ -123,12 +125,26 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
                       {line.product.sku}
                     </span>
                   </TableCell>
+                  <TableCell>
+                    <ArrivalDialog
+                      purchaseId={line.id}
+                      productName={line.product.name}
+                      quantity={line.quantity}
+                      arrivedAt={line.arrivedAt ? line.arrivedAt.toISOString().slice(0, 10) : null}
+                      arrivedAtLabel={line.arrivedAt ? formatDate(line.arrivedAt) : null}
+                    />
+                  </TableCell>
                   <TableCell className="text-right">{line.quantity}</TableCell>
                   <TableCell className="text-right">
                     {formatUsd(c.goodsUsd)}
                     <span className="block text-xs text-muted-foreground">
                       {t('each', { value: formatUsd(line.unitPriceUsd) })}
                     </span>
+                    {c.taxUsd > 0 && (
+                      <span className="block text-xs text-muted-foreground">
+                        {t('eachWithTax', { value: formatUsd(c.unitPriceWithTaxUsd) })}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     {c.taxUsd > 0 ? formatUsd(c.taxUsd) : '—'}
@@ -177,6 +193,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             })}
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableCell className="font-medium">{t('orderTotal')}</TableCell>
+              <TableCell />
               <TableCell className="text-right font-medium">{summary.units}</TableCell>
               <TableCell className="text-right font-medium">
                 {formatUsd(summary.goodsUsd)}

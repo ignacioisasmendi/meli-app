@@ -24,6 +24,8 @@ export interface OrderExtras {
 export interface AllocatedLine {
   /** Goods at the supplier's list price: unitPrice × quantity. */
   goodsUsd: number
+  /** One unit at list price plus its share of the tax, before shipping. */
+  unitPriceWithTaxUsd: number
   /** This line's share of the order's tax. */
   taxUsd: number
   /** This line's share of the order's shipping. */
@@ -71,6 +73,7 @@ export function allocateOrder(lines: LineInput[], extras: OrderExtras): Allocate
     const totalUsd = round2(goodsUsd + tax[i] + shipping[i])
     return {
       goodsUsd,
+      unitPriceWithTaxUsd: round2(Math.max(0, line.unitPrice) + tax[i] / units(line)),
       taxUsd: tax[i],
       shippingUsd: shipping[i],
       totalUsd,

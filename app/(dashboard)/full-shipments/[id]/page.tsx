@@ -5,10 +5,10 @@ import { Pencil } from 'lucide-react'
 import { FullShipmentStatus } from '@prisma/client'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { StatusBadge } from '@/components/dashboard/status-badge'
-import { AssignShipmentsDialog } from '@/components/full-shipments/assign-shipments-dialog'
+import { AddProductsDialog } from '@/components/full-shipments/add-products-dialog'
 import { FullShipmentFormDialog } from '@/components/full-shipments/full-shipment-form-dialog'
 import { MarkReceivedButton } from '@/components/full-shipments/mark-received-button'
-import { RemoveShipmentButton } from '@/components/full-shipments/remove-shipment-button'
+import { RemoveProductButton } from '@/components/full-shipments/remove-product-button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -43,15 +43,12 @@ export default async function FullShipmentDetailPage({
   if (!fullShipment) notFound()
 
   const received = fullShipment.status === FullShipmentStatus.RECEIVED
-  const units = fullShipment.shipments.reduce(
-    (n, s) => n + s.batches.reduce((m, b) => m + b.quantity, 0),
-    0
-  )
-  const lines = aggregateFullShipmentLines(fullShipment.shipments)
+  const lines = aggregateFullShipmentLines(fullShipment.batches)
+  const units = lines.reduce((n, l) => n + l.quantity, 0)
 
   const stats = [
     { label: t('status'), value: <StatusBadge status={fullShipment.status} /> },
-    { label: t('shipments'), value: fullShipment.shipments.length },
+    { label: t('products'), value: lines.length },
     { label: t('units'), value: units },
     { label: t('sentAt'), value: formatDate(fullShipment.sentAt) },
     { label: t('receivedAt'), value: fullShipment.receivedAt ? formatDate(fullShipment.receivedAt) : '—' },
@@ -67,7 +64,7 @@ export default async function FullShipmentDetailPage({
             {!received && (
               <>
                 <MarkReceivedButton fullShipmentId={fullShipment.id} />
-                <AssignShipmentsDialog fullShipmentId={fullShipment.id} />
+                <AddProductsDialog fullShipmentId={fullShipment.id} />
               </>
             )}
             <FullShipmentFormDialog
@@ -109,48 +106,6 @@ export default async function FullShipmentDetailPage({
         </Card>
       )}
 
-      <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('shipmentsIncluded')}</h2>
-      <Card className="mb-6 overflow-hidden p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('code')}</TableHead>
-              <TableHead>{t('courier')}</TableHead>
-              <TableHead className="text-right">{t('units')}</TableHead>
-              {!received && <TableHead className="w-10" />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {fullShipment.shipments.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={received ? 3 : 4} className="py-8 text-center text-muted-foreground">
-                  {t('noShipmentsIncluded')}
-                </TableCell>
-              </TableRow>
-            )}
-            {fullShipment.shipments.map((s) => {
-              const shipmentUnits = s.batches.reduce((n, b) => n + b.quantity, 0)
-              return (
-                <TableRow key={s.id}>
-                  <TableCell className="font-medium">
-                    <Link href={`/shipments/${s.id}`} className="hover:underline underline-offset-2">
-                      {s.code}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{s.courier ?? '—'}</TableCell>
-                  <TableCell className="text-right">{shipmentUnits}</TableCell>
-                  {!received && (
-                    <TableCell>
-                      <RemoveShipmentButton shipmentId={s.id} />
-                    </TableCell>
-                  )}
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </Card>
-
       <h2 className="mb-2 text-sm font-medium text-muted-foreground">{t('whatIsGoing')}</h2>
       <Card className="overflow-hidden p-0">
         <Table>
@@ -158,22 +113,47 @@ export default async function FullShipmentDetailPage({
             <TableRow>
               <TableHead>{t('product')}</TableHead>
               <TableHead>{t('sku')}</TableHead>
+              <TableHead>{t('fromShipments')}</TableHead>
               <TableHead className="text-right">{t('units')}</TableHead>
+              {!received && <TableHead className="w-10" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {lines.length === 0 && (
               <TableRow>
-                <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
-                  {t('noShipmentsIncluded')}
+                <TableCell colSpan={received ? 4 : 5} className="py-8 text-center text-muted-foreground">
+                  {t('noProductsIncluded')}
                 </TableCell>
               </TableRow>
             )}
             {lines.map((line) => (
               <TableRow key={line.productId}>
-                <TableCell className="font-medium">{line.productName}</TableCell>
+                <TableCell className="font-medium">
+                  <Link
+                    href={`/products/${line.productId}`}
+                    className="hover:underline underline-offset-2"
+                  >
+                    {line.productName}
+                  </Link>
+                </TableCell>
                 <TableCell className="text-muted-foreground">{line.sku}</TableCell>
+                <TableCell className="text-sm">
+                  {line.shipments.length === 0 && <span className="text-muted-foreground">—</span>}
+                  {line.shipments.map((s, i) => (
+                    <span key={s.id}>
+                      {i > 0 && ', '}
+                      <Link href={`/shipments/${s.id}`} className="hover:underline underline-offset-2">
+                        {s.code}
+                      </Link>
+                    </span>
+                  ))}
+                </TableCell>
                 <TableCell className="text-right">{line.quantity}</TableCell>
+                {!received && (
+                  <TableCell>
+                    <RemoveProductButton fullShipmentId={fullShipment.id} productId={line.productId} />
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

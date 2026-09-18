@@ -18,11 +18,26 @@ export const ON_HAND_STATUSES: BatchStatus[] = [
 
 type Tx = Prisma.TransactionClient
 
+/**
+ * Where a batch goes once its goods are marked as arrived at the courier in the
+ * USA. A batch already travelling in a shipment keeps following the shipment's
+ * status. A loose one that was only ordered moves to IN_USA — still on the way,
+ * never sellable: goods become received only when a shipment is costed.
+ */
+export function statusOnArrival(current: BatchStatus, inShipment: boolean): BatchStatus {
+  if (inShipment || current !== BatchStatus.PURCHASED) return current
+  return BatchStatus.IN_USA
+}
+
 export interface StockView {
   currentStock: number
   inTransit: number
   reserved: number
   available: number
+  /** On hand at the local depot: `available` that has not gone to Full. */
+  received: number
+  /** On hand inside a Mercado Libre Full warehouse. */
+  full: number
 }
 
 /**
@@ -30,17 +45,27 @@ export interface StockView {
  *   currentStock = totalPurchased − totalSold + Σ adjustments (denormalized on Product)
  *   inTransit    = Σ remainingQuantity of in-transit batches
  *   available    = currentStock − inTransit − reserved
+ *   full         = the part of `available` sitting in batches sent to Full
+ *   received     = available − full
+ *
+ * `full` is an approximation: FIFO consumes the oldest batch whichever warehouse
+ * the sale shipped from, so a sale fulfilled by Full may drain a depot batch.
+ * Capping it at `available` keeps the three buckets adding up regardless.
  */
 export function stockViewFrom(
   product: { currentStock: number; reservedStock: number },
-  inTransit: number
+  inTransit: number,
+  inFull = 0
 ): StockView {
   const available = Math.max(0, product.currentStock - inTransit - product.reservedStock)
+  const full = Math.min(Math.max(0, inFull), available)
   return {
     currentStock: product.currentStock,
     inTransit,
     reserved: product.reservedStock,
     available,
+    received: available - full,
+    full,
   }
 }
 
@@ -53,15 +78,56 @@ export async function getInTransit(productId: string, client: Tx | typeof prisma
   return agg._sum.remainingQuantity ?? 0
 }
 
+/** On-hand batches sent to a Full inbound. */
+const IN_FULL_WHERE = {
+  status: { in: ON_HAND_STATUSES },
+  fullShipmentId: { not: null },
+} satisfies Prisma.InventoryBatchWhereInput
+
+/** Sum of remaining quantity a product has sitting in Full. */
+export async function getInFull(productId: string, client: Tx | typeof prisma = prisma) {
+  const agg = await client.inventoryBatch.aggregate({
+    where: { productId, ...IN_FULL_WHERE },
+    _sum: { remainingQuantity: true },
+  })
+  return agg._sum.remainingQuantity ?? 0
+}
+
+/**
+ * In-transit and in-Full units for many products in two queries, for the list
+ * pages that would otherwise run two aggregates per row.
+ */
+export async function getBatchLocations(
+  productIds: string[]
+): Promise<Map<string, { inTransit: number; inFull: number }>> {
+  const [transit, full] = await Promise.all([
+    prisma.inventoryBatch.groupBy({
+      by: ['productId'],
+      where: { productId: { in: productIds }, status: { in: IN_TRANSIT_STATUSES } },
+      _sum: { remainingQuantity: true },
+    }),
+    prisma.inventoryBatch.groupBy({
+      by: ['productId'],
+      where: { productId: { in: productIds }, ...IN_FULL_WHERE },
+      _sum: { remainingQuantity: true },
+    }),
+  ])
+  const out = new Map(productIds.map((id) => [id, { inTransit: 0, inFull: 0 }]))
+  for (const row of transit) out.get(row.productId)!.inTransit = row._sum.remainingQuantity ?? 0
+  for (const row of full) out.get(row.productId)!.inFull = row._sum.remainingQuantity ?? 0
+  return out
+}
+
 export async function getStockView(productId: string): Promise<StockView> {
-  const [product, inTransit] = await Promise.all([
+  const [product, inTransit, inFull] = await Promise.all([
     prisma.product.findUniqueOrThrow({
       where: { id: productId },
       select: { currentStock: true, reservedStock: true },
     }),
     getInTransit(productId),
+    getInFull(productId),
   ])
-  return stockViewFrom(product, inTransit)
+  return stockViewFrom(product, inTransit, inFull)
 }
 
 /**

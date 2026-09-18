@@ -39,9 +39,23 @@ export type PurchaseOrderWithLines = Prisma.PurchaseOrderGetPayload<{
 
 export type PurchaseOrderLine = PurchaseOrderWithLines['purchases'][number]
 
+/**
+ * One unit at the supplier's price with its share of the tax folded in — the
+ * "unit price" as it was actually paid, before the supplier's shipping.
+ */
+export function unitPriceWithTaxUsd(line: {
+  unitPriceUsd: number
+  taxUsd: number
+  quantity: number
+}): number {
+  return round2(line.unitPriceUsd + line.taxUsd / Math.max(1, line.quantity))
+}
+
 export interface LineCosts {
   /** Goods at the supplier's list price, before anything is added. */
   goodsUsd: number
+  /** One unit, price + its share of tax. */
+  unitPriceWithTaxUsd: number
   taxUsd: number
   shippingUsd: number
   /** goods + tax + shipping — what the supplier billed for this line. */
@@ -73,6 +87,7 @@ export function lineCosts(line: PurchaseOrderLine): LineCosts {
 
   return {
     goodsUsd,
+    unitPriceWithTaxUsd: unitPriceWithTaxUsd(line),
     taxUsd: line.taxUsd,
     shippingUsd: line.shippingUsd,
     totalUsd,
@@ -139,30 +154,25 @@ export function summarizeOrder(lines: PurchaseOrderLine[]): OrderSummary {
   }
 }
 
-export function listPurchaseOrders(take = 100) {
-  return prisma.purchaseOrder.findMany({
-    include: purchaseOrderWithLines,
-    orderBy: { purchasedAt: 'desc' },
-    take,
-  })
-}
-
 export function getPurchaseOrder(id: string) {
   return prisma.purchaseOrder.findUnique({ where: { id }, include: purchaseOrderWithLines })
 }
 
 /**
- * One-off purchases registered by hand, which never belonged to an order. Shown
- * on their own so nothing is invisible just for lacking an order number.
+ * Every purchase line, newest first, whether or not it belongs to an order. A
+ * line that arrived in parts was split on arrival, so each row here carries
+ * exactly one arrival date.
  */
-export function listUngroupedPurchases(take = 100) {
+export function listPurchaseLines(take = 300) {
   return prisma.purchase.findMany({
-    where: { orderId: null },
     include: {
-      product: { select: { id: true, name: true, sku: true } },
+      product: { select: { id: true, name: true, sku: true, imageUrl: true } },
+      order: { select: { id: true, orderNumber: true, supplier: true } },
       batches: { select: { shipment: { select: { id: true, code: true } } }, take: 1 },
     },
-    orderBy: { purchasedAt: 'desc' },
+    orderBy: [{ purchasedAt: 'desc' }, { createdAt: 'asc' }],
     take,
   })
 }
+
+export type PurchaseLineRow = Awaited<ReturnType<typeof listPurchaseLines>>[number]

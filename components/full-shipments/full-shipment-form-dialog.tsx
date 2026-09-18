@@ -1,11 +1,10 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -17,7 +16,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -27,26 +25,17 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { createFullShipment, getShipmentsEligibleForFull, updateFullShipment } from '@/actions/full-shipments'
-import { aggregateFullShipmentLines } from '@/lib/inventory/full-shipment-lines'
+  ReceivedStockPicker,
+  fullQuantitiesValid,
+  toFullLines,
+  type FullQuantities,
+} from '@/components/full-shipments/received-stock-picker'
+import { createFullShipment, getReceivedStockForFull, updateFullShipment } from '@/actions/full-shipments'
+import type { ReceivedProduct } from '@/lib/inventory/full-shipments'
 
 interface Account {
   id: string
   nickname: string
-}
-
-interface EligibleShipment {
-  id: string
-  code: string
-  courier: string | null
-  batches: Array<{ quantity: number; product: { id: string; name: string; sku: string } }>
 }
 
 interface FullShipmentFormDialogProps {
@@ -71,36 +60,23 @@ export function FullShipmentFormDialog({
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [accountId, setAccountId] = useState(fullShipment?.accountId ?? accounts[0]?.id ?? '')
-  const [shipments, setShipments] = useState<EligibleShipment[] | null>(null)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [products, setProducts] = useState<ReceivedProduct[] | null>(null)
+  const [quantities, setQuantities] = useState<FullQuantities>({})
   const editing = Boolean(fullShipment)
-
-  const summary = useMemo(
-    () => aggregateFullShipmentLines(shipments?.filter((s) => selected.has(s.id)) ?? []),
-    [shipments, selected]
-  )
+  const valid = editing || (products !== null && fullQuantitiesValid(products, quantities))
 
   function onOpenChange(next: boolean) {
     setOpen(next)
     if (!next || editing) return
-    setShipments(null)
-    setSelected(new Set())
-    getShipmentsEligibleForFull()
-      .then(setShipments)
-      .catch(() => toast.error(t('couldNotLoadShipments')))
-  }
-
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+    setProducts(null)
+    setQuantities({})
+    getReceivedStockForFull()
+      .then(setProducts)
+      .catch(() => toast.error(t('couldNotLoadStock')))
   }
 
   function onSubmit(formData: FormData) {
-    for (const id of selected) formData.append('shipmentIds', id)
+    if (!editing) formData.set('lines', JSON.stringify(toFullLines(quantities)))
     startTransition(async () => {
       try {
         const result = editing
@@ -128,7 +104,7 @@ export function FullShipmentFormDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-2xl">
         <form action={onSubmit}>
           <DialogHeader>
             <DialogTitle>{editing ? t('editFullShipment') : t('newFullShipment')}</DialogTitle>
@@ -189,76 +165,20 @@ export function FullShipmentFormDialog({
             </div>
 
             {!editing && (
-              <>
-                <div className="grid gap-2">
-                  <Label>{t('selectShipments')}</Label>
-                  <p className="text-xs text-muted-foreground">{t('eligibleExplainer')}</p>
-                  <ScrollArea className="max-h-48 rounded-md border pr-4">
-                    {shipments === null && (
-                      <p className="py-6 text-center text-sm text-muted-foreground">{t('loading')}</p>
-                    )}
-                    {shipments?.length === 0 && (
-                      <p className="py-6 text-center text-sm text-muted-foreground">
-                        {t('nothingEligible')}
-                      </p>
-                    )}
-                    <div className="space-y-1 p-1">
-                      {shipments?.map((s) => {
-                        const units = s.batches.reduce((n, b) => n + b.quantity, 0)
-                        return (
-                          <label
-                            key={s.id}
-                            className="flex cursor-pointer items-center gap-3 rounded-md p-2 hover:bg-muted"
-                          >
-                            <Checkbox checked={selected.has(s.id)} onCheckedChange={() => toggle(s.id)} />
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium">{s.code}</span>
-                              <span className="block text-xs text-muted-foreground">
-                                {s.courier ?? '—'} · {t('unitsCount', { count: units })}
-                              </span>
-                            </span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  </ScrollArea>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>{t('summary')}</Label>
-                  {summary.length === 0 ? (
-                    <p className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
-                      {t('noSummaryYet')}
-                    </p>
-                  ) : (
-                    <div className="rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>{t('product')}</TableHead>
-                            <TableHead>{t('sku')}</TableHead>
-                            <TableHead className="text-right">{t('units')}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {summary.map((line) => (
-                            <TableRow key={line.productId}>
-                              <TableCell className="font-medium">{line.productName}</TableCell>
-                              <TableCell className="text-muted-foreground">{line.sku}</TableCell>
-                              <TableCell className="text-right">{line.quantity}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </div>
-              </>
+              <div className="grid gap-2">
+                <Label>{t('selectProducts')}</Label>
+                <p className="text-xs text-muted-foreground">{t('receivedExplainer')}</p>
+                <ReceivedStockPicker
+                  products={products}
+                  quantities={quantities}
+                  onChange={setQuantities}
+                />
+              </div>
             )}
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={isPending || !accountId}>
+            <Button type="submit" disabled={isPending || !accountId || !valid}>
               {isPending ? tCommon('saving') : editing ? tCommon('saveChanges') : t('createFullShipment')}
             </Button>
           </DialogFooter>

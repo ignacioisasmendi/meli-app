@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { BatchStatus, PurchaseStatus, ShipmentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/session'
-import { applyPurchase, recomputeAverageCost } from '@/lib/inventory/stock'
+import { applyPurchase, recomputeAverageCost, statusOnArrival } from '@/lib/inventory/stock'
 import { allocateOrder } from '@/lib/inventory/landed'
 import { SHIPMENT_TO_BATCH_STATUS } from '@/lib/inventory/shipment-costing'
 import { sendTelegramMessage } from '@/lib/telegram/client'
@@ -15,6 +15,8 @@ const importSchema = z.object({
   orderNumber: z.string().trim().optional().or(z.literal('')),
   supplier: z.string().trim().optional().or(z.literal('')),
   purchasedAt: z.string().optional(),
+  /** When the whole order arrived, if it already did. Partial arrivals are registered per line afterwards. */
+  arrivedAt: z.string().optional(),
   tax: z.coerce.number().min(0).default(0),
   shipping: z.coerce.number().min(0).default(0),
   /** Box these lines travel in. Its freight is applied later, on arrival. */
@@ -64,6 +66,10 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
   if (Number.isNaN(purchasedAt.getTime())) {
     return { ok: false, error: 'Invalid purchase date' }
   }
+  const arrivedAt = parsed.data.arrivedAt ? new Date(parsed.data.arrivedAt) : null
+  if (arrivedAt && Number.isNaN(arrivedAt.getTime())) {
+    return { ok: false, error: 'Invalid arrival date' }
+  }
 
   const shipmentId = parsed.data.shipmentId || null
   let batchStatus: BatchStatus = BatchStatus.PURCHASED
@@ -75,6 +81,7 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
     }
     batchStatus = SHIPMENT_TO_BATCH_STATUS[shipment.status]
   }
+  if (arrivedAt) batchStatus = statusOnArrival(batchStatus, !!shipmentId)
 
   // Authoritative cost breakdown — recomputed server-side, never trusted from the client.
   const allocated = allocateOrder(
@@ -130,6 +137,7 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
             supplier,
             status: batchStatus as unknown as PurchaseStatus,
             purchasedAt,
+            arrivedAt,
           },
         })
         await tx.inventoryBatch.create({

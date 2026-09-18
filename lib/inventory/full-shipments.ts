@@ -2,6 +2,8 @@ import 'server-only'
 import { format } from 'date-fns'
 import { Prisma, FullShipmentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { ON_HAND_STATUSES } from '@/lib/inventory/stock'
+import { splitBatch } from '@/lib/inventory/split'
 import { getItem, searchFulfillmentOperations } from '@/lib/mercadolibre/client'
 import { sendTelegramMessage } from '@/lib/telegram/client'
 import { fullShipmentReceivedMessage } from '@/lib/telegram/messages'
@@ -62,13 +64,13 @@ export async function syncFullShipmentReceptions(): Promise<FullShipmentSyncSumm
     where: { status: FullShipmentStatus.SENT },
     include: {
       account: true,
-      shipments: { include: { batches: { select: { productId: true } } } },
+      batches: { select: { productId: true, quantity: true } },
     },
   })
 
   let received = 0
   for (const fs of pending) {
-    const productIds = [...new Set(fs.shipments.flatMap((s) => s.batches.map((b) => b.productId)))]
+    const productIds = [...new Set(fs.batches.map((b) => b.productId))]
     if (productIds.length === 0) continue
 
     const inventoryIds = await resolveInventoryIds(fs.accountId, productIds)
@@ -102,7 +104,8 @@ export async function syncFullShipmentReceptions(): Promise<FullShipmentSyncSumm
       fullShipmentReceivedMessage({
         mlInboundId: fs.mlInboundId,
         accountNickname: fs.account.nickname,
-        shipmentCount: fs.shipments.length,
+        productCount: productIds.length,
+        units: fs.batches.reduce((n, b) => n + b.quantity, 0),
       })
     )
   }
@@ -110,17 +113,106 @@ export async function syncFullShipmentReceptions(): Promise<FullShipmentSyncSumm
   return { checked: pending.length, received }
 }
 
+// ── Allocation ───────────────────────────────────────────────────────────
+
+type Tx = Prisma.TransactionClient
+
+export interface FullLineInput {
+  productId: string
+  quantity: number
+}
+
+/**
+ * Received batches of a product that can still go to Full, oldest first — the
+ * same order FIFO sells them in, so the units shipped are the ones that would
+ * otherwise sell next from the depot.
+ */
+function receivedBatches(client: Tx | typeof prisma, productIds?: string[]) {
+  return client.inventoryBatch.findMany({
+    where: {
+      ...(productIds ? { productId: { in: productIds } } : {}),
+      status: { in: ON_HAND_STATUSES },
+      fullShipmentId: null,
+      remainingQuantity: { gt: 0 },
+    },
+    orderBy: { purchasedAt: 'asc' },
+  })
+}
+
+/**
+ * Moves `quantity` received units of each product into a Full box. Batches are
+ * taken whole while they fit and split for the last partial one (`splitBatch`),
+ * so a Full batch's `quantity` is always exactly what went into the box.
+ */
+export async function allocateToFull(tx: Tx, fullShipmentId: string, lines: FullLineInput[]) {
+  const wanted = lines.filter((l) => l.quantity > 0)
+  const batches = await receivedBatches(
+    tx,
+    wanted.map((l) => l.productId)
+  )
+
+  for (const line of wanted) {
+    let remaining = line.quantity
+    for (const batch of batches.filter((b) => b.productId === line.productId)) {
+      if (remaining <= 0) break
+      const take = Math.min(remaining, batch.remainingQuantity)
+      remaining -= take
+      if (take === batch.quantity) {
+        await tx.inventoryBatch.update({ where: { id: batch.id }, data: { fullShipmentId } })
+      } else {
+        await splitBatch(tx, batch, take, { fullShipmentId })
+      }
+    }
+    if (remaining > 0) {
+      throw new Error(`Not enough received stock: ${remaining} unit(s) short for one product`)
+    }
+  }
+}
+
+export interface ReceivedProduct {
+  productId: string
+  name: string
+  sku: string
+  imageUrl: string | null
+  /** Units on hand at the depot that no Full box has taken yet. */
+  quantity: number
+}
+
+/** Received stock per product — what a Full box can be filled from. */
+export async function listReceivedStock(): Promise<ReceivedProduct[]> {
+  const batches = await prisma.inventoryBatch.findMany({
+    where: { status: { in: ON_HAND_STATUSES }, fullShipmentId: null, remainingQuantity: { gt: 0 } },
+    select: {
+      remainingQuantity: true,
+      product: { select: { id: true, name: true, sku: true, imageUrl: true } },
+    },
+  })
+  const byProduct = new Map<string, ReceivedProduct>()
+  for (const b of batches) {
+    const row = byProduct.get(b.product.id)
+    if (row) row.quantity += b.remainingQuantity
+    else
+      byProduct.set(b.product.id, {
+        productId: b.product.id,
+        name: b.product.name,
+        sku: b.product.sku,
+        imageUrl: b.product.imageUrl,
+        quantity: b.remainingQuantity,
+      })
+  }
+  return [...byProduct.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
 // ── Reads ────────────────────────────────────────────────────────────────
 
 export const fullShipmentWithDetail = {
   account: { select: { id: true, nickname: true } },
-  shipments: {
+  batches: {
     include: {
-      batches: {
-        include: { product: { select: { id: true, name: true, sku: true } } },
-      },
+      product: { select: { id: true, name: true, sku: true, imageUrl: true } },
+      shipment: { select: { id: true, code: true } },
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { purchasedAt: 'asc' },
   },
 } satisfies Prisma.FullShipmentInclude
 

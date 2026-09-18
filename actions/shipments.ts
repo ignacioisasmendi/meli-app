@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { AllocationBasis, PurchaseStatus, ShipmentStatus } from '@prisma/client'
+import { AllocationBasis, BatchStatus, PurchaseStatus, ShipmentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/session'
 import {
@@ -12,6 +12,7 @@ import {
 } from '@/lib/inventory/shipment-costing'
 import { IN_TRANSIT_STATUSES, recomputeAverageCost } from '@/lib/inventory/stock'
 import { arsToUsd } from '@/lib/inventory/shipment'
+import { splitBatch, splitPurchase } from '@/lib/inventory/split'
 import { getUsdArsRate } from '@/lib/settings'
 import { sendTelegramMessage } from '@/lib/telegram/client'
 import { shipmentCostedMessage } from '@/lib/telegram/messages'
@@ -117,6 +118,13 @@ export async function updateShipmentStatus(
 
   const shipment = await prisma.shipment.findUnique({ where: { id } })
   if (!shipment) return { ok: false, error: 'Shipment not found' }
+  // Moving the box back would drag units already sitting in Full out of stock.
+  const inFull = await prisma.inventoryBatch.count({
+    where: { shipmentId: id, fullShipmentId: { not: null } },
+  })
+  if (inFull > 0) {
+    return { ok: false, error: 'Part of this shipment was already sent to Full — its status can no longer change' }
+  }
 
   const batchStatus = SHIPMENT_TO_BATCH_STATUS[status]
 
@@ -190,6 +198,86 @@ export async function assignBatches(
   })
 
   revalidateShipment(shipmentId ?? undefined)
+  return { ok: true }
+}
+
+const addPurchasesSchema = z.object({
+  shipmentId: z.string().min(1),
+  lines: z
+    .array(
+      z.object({
+        batchId: z.string().min(1),
+        quantity: z.coerce.number().int().positive('Quantity must be positive'),
+      })
+    )
+    .min(1, 'Select at least one purchase'),
+})
+
+/**
+ * Puts purchases into a shipment, each either whole or in part. A part splits
+ * the purchase first (see `splitPurchase`): the units going in keep this row,
+ * the rest become a new purchase that stays unassigned with the same arrival
+ * date — for the same line reaching the courier on different days.
+ */
+export async function addPurchasesToShipment(
+  input: z.input<typeof addPurchasesSchema>
+): Promise<ActionResult> {
+  await requireUser()
+  const parsed = addPurchasesSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid input' }
+  }
+  const { shipmentId, lines } = parsed.data
+
+  const shipment = await prisma.shipment.findUnique({ where: { id: shipmentId } })
+  if (!shipment) return { ok: false, error: 'Shipment not found' }
+  if (shipment.status === ShipmentStatus.COSTED) {
+    return { ok: false, error: 'That shipment is already costed — reopen it to change what is inside' }
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const line of lines) {
+        const batch = await tx.inventoryBatch.findUnique({
+          where: { id: line.batchId },
+          include: { purchase: { include: { batches: true } } },
+        })
+        if (!batch || batch.shipmentId || !IN_TRANSIT_STATUSES.includes(batch.status)) {
+          throw new Error('One of the selected purchases is no longer available')
+        }
+        if (line.quantity > batch.quantity) {
+          throw new Error(`Only ${batch.quantity} units left in that purchase`)
+        }
+        if (line.quantity < batch.quantity) {
+          if (batch.purchase) {
+            await splitPurchase(tx, batch.purchase, line.quantity, {
+              arrivedAt: batch.purchase.arrivedAt,
+            })
+          } else {
+            await splitBatch(tx, batch, batch.quantity - line.quantity)
+          }
+        }
+
+        // An open box is still being packed at the courier, so goods that
+        // already reached it don't go back to "purchased".
+        const status =
+          shipment.status === ShipmentStatus.OPEN && batch.status === BatchStatus.IN_USA
+            ? BatchStatus.IN_USA
+            : SHIPMENT_TO_BATCH_STATUS[shipment.status]
+        await tx.inventoryBatch.update({ where: { id: batch.id }, data: { shipmentId, status } })
+        if (batch.purchaseId) {
+          await tx.purchase.update({
+            where: { id: batch.purchaseId },
+            data: { status: status as unknown as PurchaseStatus },
+          })
+        }
+      }
+    })
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Could not add purchases' }
+  }
+
+  revalidateShipment(shipmentId)
   return { ok: true }
 }
 
@@ -353,7 +441,16 @@ export async function getUnassignedBatches() {
       status: { in: IN_TRANSIT_STATUSES },
       remainingQuantity: { gt: 0 },
     },
-    include: { product: { select: { name: true, sku: true } } },
+    include: {
+      product: { select: { name: true, sku: true } },
+      purchase: {
+        select: {
+          purchasedAt: true,
+          arrivedAt: true,
+          order: { select: { orderNumber: true } },
+        },
+      },
+    },
     orderBy: { purchasedAt: 'desc' },
     take: 200,
   })

@@ -132,6 +132,12 @@ export function PurchaseFormDialog({ products }: { products: ProductOption[] }) 
                 <Input id="purchasedAt" name="purchasedAt" type="date" />
               </div>
             </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="arrivedAt">{t('arrivedAt')}</Label>
+              <Input id="arrivedAt" name="arrivedAt" type="date" />
+              <p className="text-xs text-muted-foreground">{t('arrivedAtHint')}</p>
+            </div>
           </div>
 
           <DialogFooter>

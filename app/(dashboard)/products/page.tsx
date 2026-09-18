@@ -19,7 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatUsd } from '@/lib/utils'
-import { getInTransit, stockViewFrom } from '@/lib/inventory/stock'
+import { getBatchLocations, stockViewFrom } from '@/lib/inventory/stock'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,9 +44,11 @@ export default async function ProductsPage({
   }
 
   const products = await prisma.product.findMany({ where, orderBy: { name: 'asc' } })
-  const views = await Promise.all(
-    products.map(async (p) => stockViewFrom(p, await getInTransit(p.id)))
-  )
+  const locations = await getBatchLocations(products.map((p) => p.id))
+  const views = products.map((p) => {
+    const { inTransit, inFull } = locations.get(p.id)!
+    return stockViewFrom(p, inTransit, inFull)
+  })
 
   return (
     <div>
@@ -70,8 +72,10 @@ export default async function ProductsPage({
               <TableHead>{t('sku')}</TableHead>
               <TableHead>{t('name')}</TableHead>
               <TableHead>{t('brand')}</TableHead>
-              <TableHead className="text-right">{t('available')}</TableHead>
+              <TableHead className="text-right">{t('weight')}</TableHead>
               <TableHead className="text-right">{t('inTransit')}</TableHead>
+              <TableHead className="text-right">{t('received')}</TableHead>
+              <TableHead className="text-right">{t('full')}</TableHead>
               <TableHead className="text-right">{t('reserved')}</TableHead>
               <TableHead className="text-right">{t('avgCost')}</TableHead>
               <TableHead className="w-12">
@@ -82,7 +86,7 @@ export default async function ProductsPage({
           <TableBody>
             {products.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
                   {t('noProductsYet')}
                 </TableCell>
               </TableRow>
@@ -100,20 +104,26 @@ export default async function ProductsPage({
                     <Link href={`/products/${p.id}`} className="hover:underline">
                       {p.name}
                     </Link>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{p.brand ?? '—'}</TableCell>
-                  <TableCell className="text-right">
-                    <span className={low ? 'font-semibold text-destructive' : ''}>
-                      {v.available}
-                    </span>
                     {low && (
                       <Badge variant="destructive" className="ml-2">
                         {t('low')}
                       </Badge>
                     )}
                   </TableCell>
+                  <TableCell className="text-muted-foreground">{p.brand ?? '—'}</TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {p.weightGrams != null ? t('grams', { value: p.weightGrams }) : '—'}
+                  </TableCell>
                   <TableCell className="text-right text-muted-foreground">
                     {v.inTransit}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className={low ? 'font-semibold text-destructive' : ''}>
+                      {v.received}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className={low ? 'font-semibold text-destructive' : ''}>{v.full}</span>
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground">
                     {v.reserved}

@@ -81,6 +81,7 @@ export function PurchaseImport({
   const [orderNumber, setOrderNumber] = useState('')
   const [supplier, setSupplier] = useState('Amazon')
   const [purchasedAt, setPurchasedAt] = useState('')
+  const [arrivedAt, setArrivedAt] = useState('')
   const [tax, setTax] = useState('')
   const [shipping, setShipping] = useState('')
   const [shipmentId, setShipmentId] = useState(NO_SHIPMENT)
@@ -155,6 +156,7 @@ export function PurchaseImport({
       orderNumber: orderNumber.trim(),
       supplier: supplier.trim(),
       purchasedAt: purchasedAt || undefined,
+      arrivedAt: arrivedAt || undefined,
       tax: num(tax),
       shipping: num(shipping),
       shipmentId: shipmentId === NO_SHIPMENT ? undefined : shipmentId,
@@ -239,6 +241,15 @@ export function PurchaseImport({
               onChange={(e) => setPurchasedAt(e.target.value)}
             />
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor="arrivedAt">{t('arrivalDate')}</Label>
+            <Input
+              id="arrivedAt"
+              type="date"
+              value={arrivedAt}
+              onChange={(e) => setArrivedAt(e.target.value)}
+            />
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="grid gap-2">
               <Label htmlFor="tax">{t('taxUsd')}</Label>
@@ -304,6 +315,8 @@ export function PurchaseImport({
                         <span className="text-muted-foreground">
                           {' '}
                           + {t('plusTax', { value: formatUsd(allocated[i].taxUsd) })}
+                          {' '}
+                          ({t('perUnitWithTax', { value: formatUsd(allocated[i].unitPriceWithTaxUsd) })})
                         </span>
                       )}
                       {allocated[i].shippingUsd > 0 && (
