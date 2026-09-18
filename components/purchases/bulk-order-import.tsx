@@ -37,21 +37,22 @@ import {
 } from '@/lib/imports/bulk-orders'
 import { importPurchasesBulk, type BulkImportPayload } from '@/actions/imports'
 import type { ShipmentOption } from '@/components/purchases/purchase-import'
-
-interface ProductOption {
-  id: string
-  name: string
-  sku: string
-}
+import {
+  NEW_PRODUCT,
+  ProductPicker,
+  type ProductOption,
+} from '@/components/purchases/product-picker'
 
 const NO_SHIPMENT = '__none__'
-const NEW_PRODUCT = '__new__'
 
 interface DraftLine {
   mode: 'existing' | 'new'
   productId: string
   sku: string
+  /** Name the new product is created with — starts as the item's, editable. */
   name: string
+  /** The item's name as it came in the JSON, kept for reference. */
+  itemName: string
   quantity: number
   unitPrice: number
   /** List price before the order discount, shown for reference only. */
@@ -83,6 +84,7 @@ function toDrafts(orders: BulkOrder[], products: ProductOption[]): DraftOrder[] 
     lines: items.map((item): DraftLine => {
       const base = {
         name: item.name,
+        itemName: item.name,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         listPrice: item.listPrice,
@@ -90,7 +92,7 @@ function toDrafts(orders: BulkOrder[], products: ProductOption[]): DraftOrder[] 
       const explicit = item.sku ? bySku.get(item.sku.toUpperCase()) : undefined
       const match = explicit ?? (item.sku ? null : matchProduct(item.name, products))
       if (match) {
-        return { ...base, mode: 'existing', productId: match.id, sku: '', name: match.name }
+        return { ...base, mode: 'existing', productId: match.id, sku: '' }
       }
 
       let sku = item.sku ?? newSkuByName.get(normalizeName(item.name))
@@ -183,6 +185,35 @@ export function BulkOrderImport({
     )
   }
 
+  /**
+   * Renames a new product everywhere it's being created: lines sharing a new
+   * SKU become one product, so they must agree on its name.
+   */
+  function renameNewProduct(sku: string, name: string) {
+    const key = sku.trim().toUpperCase()
+    setDrafts((prev) =>
+      prev!.map((order) => ({
+        ...order,
+        lines: order.lines.map((line) =>
+          line.mode === 'new' && line.sku.trim().toUpperCase() === key ? { ...line, name } : line
+        ),
+      }))
+    )
+  }
+
+  function mapLine(o: number, l: number, value: string) {
+    const line = drafts![o].lines[l]
+    if (value !== NEW_PRODUCT) {
+      patchLine(o, l, { mode: 'existing', productId: value })
+      return
+    }
+    patchLine(o, l, {
+      mode: 'new',
+      name: line.name || line.itemName,
+      sku: line.sku || suggestSku(line.itemName, new Set(products.map((p) => p.sku.toUpperCase()))),
+    })
+  }
+
   function removeOrder(o: number) {
     setDrafts((prev) => {
       const next = prev!.filter((_, oi) => oi !== o)
@@ -223,7 +254,7 @@ export function BulkOrderImport({
         mode: l.mode,
         productId: l.mode === 'existing' ? l.productId : undefined,
         sku: l.mode === 'new' ? l.sku.trim() : undefined,
-        name: l.name.trim(),
+        name: (l.mode === 'new' ? l.name : l.itemName).trim(),
         quantity: l.quantity,
         unitPrice: l.unitPrice,
       })),
@@ -388,7 +419,7 @@ export function BulkOrderImport({
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t('item')}</TableHead>
-                        <TableHead className="min-w-64">{t('mapTo')}</TableHead>
+                        <TableHead className="min-w-80">{t('mapTo')}</TableHead>
                         <TableHead className="text-right">{t('qty')}</TableHead>
                         <TableHead className="text-right">{t('unitPrice')}</TableHead>
                         <TableHead className="text-right">{t('unitCost')}</TableHead>
@@ -397,41 +428,37 @@ export function BulkOrderImport({
                     <TableBody>
                       {order.lines.map((line, l) => (
                         <TableRow key={l}>
-                          <TableCell className="max-w-72 truncate" title={line.name}>
-                            {line.name}
+                          <TableCell
+                            className="max-w-72 align-top whitespace-normal text-muted-foreground"
+                            title={line.itemName}
+                          >
+                            {line.itemName}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Select
+                          <TableCell className="align-top">
+                            <div className="grid gap-2">
+                              <ProductPicker
+                                products={products}
                                 value={line.mode === 'existing' ? line.productId : NEW_PRODUCT}
-                                onValueChange={(v) =>
-                                  v === NEW_PRODUCT
-                                    ? patchLine(o, l, {
-                                        mode: 'new',
-                                        sku: line.sku || suggestSku(line.name, new Set(products.map((p) => p.sku.toUpperCase()))),
-                                      })
-                                    : patchLine(o, l, { mode: 'existing', productId: v })
-                                }
-                              >
-                                <SelectTrigger className="h-8 w-48">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value={NEW_PRODUCT}>{t('newProduct')}</SelectItem>
-                                  {products.map((p) => (
-                                    <SelectItem key={p.id} value={p.id}>
-                                      {p.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                onChange={(v) => mapLine(o, l, v)}
+                                className="h-8 w-80"
+                              />
                               {line.mode === 'new' && (
-                                <Input
-                                  className="h-8 w-40 font-mono text-xs"
-                                  value={line.sku}
-                                  placeholder="SKU"
-                                  onChange={(e) => patchLine(o, l, { sku: e.target.value })}
-                                />
+                                <div className="flex gap-2">
+                                  <Input
+                                    className="h-8 flex-1"
+                                    value={line.name}
+                                    placeholder={t('productName')}
+                                    aria-label={t('productName')}
+                                    onChange={(e) => renameNewProduct(line.sku, e.target.value)}
+                                  />
+                                  <Input
+                                    className="h-8 w-36 font-mono text-xs"
+                                    value={line.sku}
+                                    placeholder="SKU"
+                                    aria-label="SKU"
+                                    onChange={(e) => patchLine(o, l, { sku: e.target.value })}
+                                  />
+                                </div>
                               )}
                             </div>
                           </TableCell>

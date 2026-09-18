@@ -705,7 +705,8 @@
       "subtotalMismatch": "Los ítems suman {lineSum} pero la orden dice {itemsSubtotal} — revisá cantidades y precios",
       "grandTotalMismatch": "Esto suma {computed} pero el total de la orden es {grandTotal} — revisá descuento, impuesto y envío",
       "unexpectedCurrency": "Los montos están en {currency}, no en USD — convertilos antes de importar"
-    }
+    },
+    "productName": "Nombre del producto nuevo"
   },
   "EstimatedArrival": {
     "label": "Estimada {date}",
@@ -727,5 +728,10 @@
     "hint": "Solo se puede mientras ninguna de estas unidades se haya vendido ni enviado a Full.",
     "submit": "Vincular",
     "done": "Compra vinculada"
+  },
+  "ProductPicker": {
+    "newProduct": "+ Producto nuevo",
+    "search": "Buscar por nombre o SKU…",
+    "noMatches": "Ningún producto coincide"
   }
 }

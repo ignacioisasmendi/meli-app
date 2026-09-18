@@ -705,7 +705,8 @@
       "subtotalMismatch": "Items add up to {lineSum} but the order says {itemsSubtotal} — check quantities and prices",
       "grandTotalMismatch": "This adds up to {computed} but the order total is {grandTotal} — check the discount, tax and shipping",
       "unexpectedCurrency": "Amounts are in {currency}, not USD — convert them before importing"
-    }
+    },
+    "productName": "New product name"
   },
   "EstimatedArrival": {
     "label": "ETA {date}",
@@ -727,5 +728,10 @@
     "hint": "Only possible while none of these units were sold or sent to Full.",
     "submit": "Link",
     "done": "Purchase linked"
+  },
+  "ProductPicker": {
+    "newProduct": "+ New product",
+    "search": "Search by name or SKU…",
+    "noMatches": "No products match"
   }
 }

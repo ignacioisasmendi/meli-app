@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PasteOrderImport } from '@/components/purchases/paste-order-import'
+import { NEW_PRODUCT, ProductPicker } from '@/components/purchases/product-picker'
 import { ScannedOrderReview } from '@/components/purchases/scanned-order-review'
 import { ScreenshotDropzone } from '@/components/purchases/screenshot-dropzone'
 import { formatUsd } from '@/lib/utils'
@@ -360,10 +361,11 @@ export function PurchaseImport({
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>{t('mapTo')}</Label>
-                  <Select
-                    value={line.mode === 'existing' ? line.productId : '__new__'}
-                    onValueChange={(v) =>
-                      v === '__new__'
+                  <ProductPicker
+                    products={products}
+                    value={line.mode === 'existing' ? line.productId : NEW_PRODUCT}
+                    onChange={(v) =>
+                      v === NEW_PRODUCT
                         ? patch(i, { mode: 'new' })
                         : patch(i, {
                             mode: 'existing',
@@ -371,19 +373,7 @@ export function PurchaseImport({
                             name: products.find((p) => p.id === v)?.name ?? line.name,
                           })
                     }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('select')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__new__">{t('createNewProduct')}</SelectItem>
-                      {products.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
 
                 {line.mode === 'new' && (
