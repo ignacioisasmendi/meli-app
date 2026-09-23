@@ -194,3 +194,27 @@ export function dailySummaryMessage(params: {
     `*Best Seller:* ${params.bestSeller ?? '—'}`,
   ].join('\n')
 }
+
+export function importDraftMessage(params: {
+  supplier: string
+  orderNumber: string | null
+  itemCount: number
+  units: number
+  grandTotalUsd: number | null
+  warningCount: number
+  reviewUrl: string
+}): string {
+  return [
+    '📥 *Order ready to review*',
+    '',
+    `*Supplier:* ${params.supplier}`,
+    `*Order:* ${params.orderNumber ?? '—'}`,
+    `*Items:* ${params.itemCount} (${params.units} units)`,
+    `*Total:* ${params.grandTotalUsd != null ? formatUsd(params.grandTotalUsd) : '—'}`,
+    ...(params.warningCount > 0
+      ? [`⚠️ ${params.warningCount} total(s) didn't add up — check before importing`]
+      : []),
+    '',
+    `[Review and import](${params.reviewUrl})`,
+  ].join('\n')
+}

@@ -1,17 +1,24 @@
 import Link from 'next/link'
 import { Files } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
-import { ShipmentStatus } from '@prisma/client'
+import { ImportDraftStatus, ShipmentStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Button } from '@/components/ui/button'
+import { ImportDrafts } from '@/components/purchases/import-drafts'
 import { PurchaseImport } from '@/components/purchases/purchase-import'
+import type { OrderWarning, ParsedOrder } from '@/lib/imports/amazon-order'
 
 export const dynamic = 'force-dynamic'
 
-export default async function ImportPurchasesPage() {
+export default async function ImportPurchasesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ draft?: string }>
+}) {
   const t = await getTranslations('PurchaseImport')
-  const [products, shipments] = await Promise.all([
+  const { draft: draftId } = await searchParams
+  const [products, shipments, drafts] = await Promise.all([
     prisma.product.findMany({
       where: { archived: false },
       select: { id: true, name: true, sku: true },
@@ -22,10 +29,23 @@ export default async function ImportPurchasesPage() {
       select: { id: true, code: true, courier: true },
       orderBy: { createdAt: 'desc' },
     }),
+    // Orders captured by the browser extension, waiting for review.
+    prisma.importDraft.findMany({
+      where: { status: ImportDraftStatus.PENDING },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    }),
   ])
 
+  const draftRow = draftId ? drafts.find((d) => d.id === draftId) : undefined
+  const draft = draftRow && {
+    id: draftRow.id,
+    order: draftRow.order as unknown as ParsedOrder,
+    warnings: draftRow.warnings as unknown as OrderWarning[],
+  }
+
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={t('title')}
         description={t('description')}
@@ -38,10 +58,35 @@ export default async function ImportPurchasesPage() {
           </Button>
         }
       />
+      {draftId && !draft && (
+        <p className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+          {t('draftUnavailable')}
+        </p>
+      )}
+      {drafts.length > 0 && (
+        <ImportDrafts
+          activeId={draft?.id}
+          drafts={drafts.map((d) => {
+            const order = d.order as unknown as ParsedOrder
+            return {
+              id: d.id,
+              orderNumber: d.orderNumber,
+              itemCount: order.items.length,
+              grandTotal: order.grandTotal,
+              warningCount: (d.warnings as unknown as OrderWarning[]).length,
+              sourceUrl: d.sourceUrl,
+              createdAt: d.createdAt.toISOString(),
+            }
+          })}
+        />
+      )}
       <PurchaseImport
+        // Remount per draft, so switching drafts starts from a clean form.
+        key={draft?.id ?? 'blank'}
         products={products}
         shipments={shipments}
         canUploadScreenshot={Boolean(process.env.ANTHROPIC_API_KEY)}
+        draft={draft}
       />
     </div>
   )

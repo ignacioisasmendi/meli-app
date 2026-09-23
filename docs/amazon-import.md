@@ -1,6 +1,6 @@
-# Importing Amazon orders from a screenshot
+# Importing Amazon orders
 
-Two ways to turn an Amazon "Order Details" screenshot into purchase lines. Both
+Three ways to turn an Amazon "Order Details" page into purchase lines. All
 land in the same place: the form at `/purchases/import`, pre-filled and still
 editable, with a review panel showing what was read before anything is saved.
 
@@ -73,6 +73,34 @@ Requires `ANTHROPIC_API_KEY` in `.env.local`; the tab is hidden when it is unset
 Drop, paste, or pick the image on **Purchases → Import → Upload screenshot** and
 the server calls Claude for you. Costs a few cents per order, saves the round trip
 through claude.ai.
+
+## C. One click from the Amazon page (browser extension)
+
+The extension in `extension/` adds an **Enviar al CRM** button to Amazon's
+"Order Details" page. It sends the page's visible text (not a screenshot, not
+the HTML) plus the ASINs of the linked products to `/api/imports/extension`,
+which reads the order with Claude and parks it as an **ImportDraft**. A Telegram
+message links straight to it; it also shows up at the top of
+**Purchases → Import** under *captured orders to review*. Opening one pre-fills
+the form below; **Import** works exactly as for the other two paths and marks
+the draft imported. Pressing the button again on the same order answers
+"already imported" / "already waiting for review" without another extraction.
+
+Setup (once):
+
+1. Set `EXTENSION_TOKEN` (and `ANTHROPIC_API_KEY`) on the server —
+   `openssl rand -hex 32` gives a good token.
+2. In Chrome, open `chrome://extensions`, turn on **Developer mode**, press
+   **Load unpacked** and pick the `extension/` folder.
+3. The options page opens from the extension's toolbar icon: enter the CRM's
+   URL and the token, press **Probar conexión** and accept the permission prompt.
+
+To update the extension after pulling changes, press the reload icon on its
+card in `chrome://extensions` and reload the Amazon tab.
+
+Sending text rather than parsing the HTML means Amazon reshuffling its markup
+doesn't break the import. Card digits ("ending in 1234") are masked before
+sending; the rest of the page, including the shipping address, reaches Claude.
 
 ## What gets checked
 

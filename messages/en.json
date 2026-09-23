@@ -305,7 +305,21 @@
     "arrivalDate": "Arrived at courier",
     "perUnitWithTax": "{value}/unit with tax",
     "bulkImport": "Bulk import (JSON)",
-    "estimatedArrival": "Estimated arrival"
+    "estimatedArrival": "Estimated arrival",
+    "draftUnavailable": "That captured order was already imported or discarded."
+  },
+  "ImportDrafts": {
+    "title": "{count, plural, one {# captured order to review} other {# captured orders to review}}",
+    "description": "Sent from Amazon with the browser extension. Open one to review it in the form below — nothing is saved until you import it.",
+    "order": "Order {orderNumber}",
+    "noOrderNumber": "No order number found",
+    "itemCount": "{count, plural, one {# item} other {# items}}",
+    "captured": "captured {date}",
+    "warnings": "{count, plural, one {# total didn't add up} other {# totals didn't add up}}",
+    "review": "Review",
+    "discard": "Discard",
+    "discarded": "Draft discarded",
+    "openOnAmazon": "Open on Amazon"
   },
   "PurchaseForm": {
     "registerPurchase": "Register purchase",

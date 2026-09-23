@@ -215,6 +215,43 @@ model PurchaseOrder {
   @@map("purchase_orders")
 }
 
+/// Where an `ImportDraft` stands. Only PENDING drafts show up for review.
+enum ImportDraftStatus {
+  PENDING
+  IMPORTED
+  DISCARDED
+}
+
+/// A supplier order captured outside the app (the browser extension on an
+/// Amazon "Order Details" page) and already read into purchase lines, waiting
+/// for a human to review it. Nothing here touches stock or cost: the review
+/// page pre-fills the normal import form, and `importPurchases` does the rest.
+model ImportDraft {
+  id          String            @id @default(cuid())
+  /// What captured it — "extension" for now.
+  source      String
+  supplier    String
+  /// As read off the page; null when it couldn't be.
+  orderNumber String?
+  /// The page the order was captured from, so it can be reopened.
+  sourceUrl   String?
+  status      ImportDraftStatus @default(PENDING)
+  /// The `ParsedOrder` read off the page.
+  order       Json
+  /// `OrderWarning[]` from `reconcileOrder` — totals that didn't add up.
+  warnings    Json
+  /// Product links found on the page (`{ asin, title }[]`), kept so a later
+  /// import can map a re-ordered ASIN straight onto its product.
+  pageItems   Json?
+  importedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([status])
+  @@index([supplier, orderNumber])
+  @@map("import_drafts")
+}
+
 model Purchase {
   id           String         @id @default(cuid())
   productId    String

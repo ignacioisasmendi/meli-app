@@ -59,6 +59,44 @@ const emptyLine = (): DraftLine => ({
   unitPrice: '',
 })
 
+/**
+ * Draft lines for a scanned order. Items that clearly match an existing product
+ * are mapped onto it; the rest become new products with a suggested SKU.
+ */
+function linesFromOrder(order: ParsedOrder, products: ProductOption[]): DraftLine[] {
+  const taken = new Set(products.map((p) => p.sku.toUpperCase()))
+  return order.items.map((item): DraftLine => {
+    const match = matchProduct(item.fullTitle || item.name, products)
+    if (match) {
+      return {
+        mode: 'existing',
+        productId: match.id,
+        sku: '',
+        name: match.name,
+        quantity: String(item.quantity),
+        unitPrice: String(item.unitPrice),
+      }
+    }
+    const sku = suggestSku(item.name, taken)
+    taken.add(sku)
+    return {
+      mode: 'new',
+      productId: '',
+      sku,
+      name: item.name,
+      quantity: String(item.quantity),
+      unitPrice: String(item.unitPrice),
+    }
+  })
+}
+
+/** An order captured by the browser extension, already read and waiting for review. */
+export interface ImportDraftInput {
+  id: string
+  order: ParsedOrder
+  warnings: OrderWarning[]
+}
+
 const num = (s: string) => {
   const n = Number(s)
   return Number.isFinite(n) ? n : 0
@@ -68,36 +106,45 @@ export function PurchaseImport({
   products,
   shipments,
   canUploadScreenshot,
+  draft,
 }: {
   products: ProductOption[]
   /** Shipments still open to receive purchases. */
   shipments: ShipmentOption[]
   /** The API import path only works when ANTHROPIC_API_KEY is configured. */
   canUploadScreenshot: boolean
+  /** Pre-fills the form; importing marks the draft done. Remount (key) to switch drafts. */
+  draft?: ImportDraftInput
 }) {
   const t = useTranslations('PurchaseImport')
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
-  const [orderNumber, setOrderNumber] = useState('')
+  const initial = draft?.order
+  const [orderNumber, setOrderNumber] = useState(initial?.orderNumber ?? '')
   const [supplier, setSupplier] = useState('Amazon')
-  const [purchasedAt, setPurchasedAt] = useState('')
+  const [purchasedAt, setPurchasedAt] = useState(initial?.purchasedAt ?? '')
   const [arrivedAt, setArrivedAt] = useState('')
   const [estimatedArrivalAt, setEstimatedArrivalAt] = useState('')
-  const [tax, setTax] = useState('')
-  const [shipping, setShipping] = useState('')
+  const [tax, setTax] = useState(initial?.tax != null ? String(initial.tax) : '')
+  const [shipping, setShipping] = useState(initial?.shipping != null ? String(initial.shipping) : '')
   const [shipmentId, setShipmentId] = useState(NO_SHIPMENT)
-  const [lines, setLines] = useState<DraftLine[]>([emptyLine()])
-  const [scanned, setScanned] = useState<{ order: ParsedOrder; warnings: OrderWarning[] } | null>(null)
+  const [lines, setLines] = useState<DraftLine[]>(() =>
+    initial && initial.items.length > 0 ? linesFromOrder(initial, products) : [emptyLine()]
+  )
+  const [scanned, setScanned] = useState<{ order: ParsedOrder; warnings: OrderWarning[] } | null>(
+    draft ? { order: draft.order, warnings: draft.warnings } : null
+  )
+  // Filling the form from a screenshot replaces whatever the draft had put there.
+  const [draftId, setDraftId] = useState(draft?.id)
 
   function patch(i: number, change: Partial<DraftLine>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...change } : l)))
   }
 
   /**
-   * Fills the form from a scanned order. Items that clearly match an existing
-   * product are mapped onto it; the rest become new products with a suggested
-   * SKU. Everything stays editable — nothing is saved until "Import".
+   * Fills the form from a scanned order (see `linesFromOrder`). Everything
+   * stays editable — nothing is saved until "Import".
    */
   function applyParsed(order: ParsedOrder, orderWarnings: OrderWarning[]) {
     if (order.items.length === 0) {
@@ -111,32 +158,9 @@ export function PurchaseImport({
     setTax(order.tax != null ? String(order.tax) : '')
     setShipping(order.shipping != null ? String(order.shipping) : '')
     setScanned({ order, warnings: orderWarnings })
+    setDraftId(undefined)
 
-    const taken = new Set(products.map((p) => p.sku.toUpperCase()))
-    const scannedLines = order.items.map((item): DraftLine => {
-      const match = matchProduct(item.fullTitle || item.name, products)
-      if (match) {
-        return {
-          mode: 'existing',
-          productId: match.id,
-          sku: '',
-          name: match.name,
-          quantity: String(item.quantity),
-          unitPrice: String(item.unitPrice),
-        }
-      }
-      const sku = suggestSku(item.name, taken)
-      taken.add(sku)
-      return {
-        mode: 'new',
-        productId: '',
-        sku,
-        name: item.name,
-        quantity: String(item.quantity),
-        unitPrice: String(item.unitPrice),
-      }
-    })
-
+    const scannedLines = linesFromOrder(order, products)
     setLines(scannedLines)
     const matched = scannedLines.filter((l) => l.mode === 'existing').length
     toast.success(
@@ -163,6 +187,7 @@ export function PurchaseImport({
       tax: num(tax),
       shipping: num(shipping),
       shipmentId: shipmentId === NO_SHIPMENT ? undefined : shipmentId,
+      draftId,
       lines: lines.map((l) => ({
         mode: l.mode,
         productId: l.mode === 'existing' ? l.productId : undefined,
