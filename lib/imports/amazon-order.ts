@@ -16,7 +16,15 @@ export interface ParsedOrderItem {
   /** Price for ONE unit, before tax and shipping. */
   unitPrice: number
   seller: string | null
+  /**
+   * Amazon's product id, when the page linked the item to its listing. Only
+   * the browser-extension path sees the links, so screenshots leave it unset.
+   */
+  asin?: string | null
 }
+
+/** Amazon's 10-character product id — `B0…` for most products, the ISBN-10 for books. */
+export const ASIN_PATTERN = /^[A-Z0-9]{10}$/
 
 export interface ParsedOrder {
   orderNumber: string | null
@@ -70,6 +78,7 @@ export function normalizeOrder(order: ParsedOrder): ParsedOrder {
         quantity: Math.max(1, Math.round(i.quantity || 1)),
         unitPrice: round2(i.unitPrice),
         seller: i.seller?.trim() || null,
+        asin: ASIN_PATTERN.test(i.asin?.trim() ?? '') ? i.asin!.trim() : null,
       })),
   }
 }

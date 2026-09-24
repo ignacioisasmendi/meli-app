@@ -306,7 +306,8 @@
     "perUnitWithTax": "{value} c/u con imp.",
     "bulkImport": "Importación masiva (JSON)",
     "estimatedArrival": "Llegada estimada",
-    "draftUnavailable": "Esa orden capturada ya fue importada o descartada."
+    "draftUnavailable": "Esa orden capturada ya fue importada o descartada.",
+    "matchedByAsin": "ASIN conocido"
   },
   "ImportDrafts": {
     "title": "{count, plural, one {# orden capturada para revisar} other {# órdenes capturadas para revisar}}",

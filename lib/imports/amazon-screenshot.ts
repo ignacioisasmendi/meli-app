@@ -13,7 +13,12 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
-import { normalizeOrder, type ParsedOrder, type Screenshot } from '@/lib/imports/amazon-order'
+import {
+  normalizeOrder,
+  type ParsedOrder,
+  type ParsedOrderItem,
+  type Screenshot,
+} from '@/lib/imports/amazon-order'
 import {
   EXTRACTION_SYSTEM_PROMPT,
   TEXT_EXTRACTION_SYSTEM_PROMPT,
@@ -61,6 +66,35 @@ const ORDER_SCHEMA = {
   additionalProperties: false,
 }
 
+/**
+ * The text path's schema: same order, plus each item's ASIN, picked from the
+ * product links the extension found on the page.
+ */
+const ORDER_WITH_ASIN_SCHEMA = (() => {
+  const item = ORDER_SCHEMA.properties.items.items
+  return {
+    ...ORDER_SCHEMA,
+    properties: {
+      ...ORDER_SCHEMA.properties,
+      items: {
+        ...ORDER_SCHEMA.properties.items,
+        items: {
+          ...item,
+          properties: { ...item.properties, asin: nullableString },
+          required: [...item.required, 'asin'],
+        },
+      },
+    },
+  }
+})()
+
+/** A product link found on the order page by the browser extension. */
+export interface PageProductLink {
+  asin: string
+  /** The link's text — usually the listing title, sometimes shortened. */
+  title: string
+}
+
 /** Thrown when the API key is missing, so callers can show a config error. */
 export class MissingAnthropicKeyError extends Error {
   constructor() {
@@ -79,7 +113,8 @@ export const MAX_PAGE_TEXT_CHARS = 60_000
 async function extractOrder(
   system: string,
   content: Anthropic.ContentBlockParam[],
-  errors: { tooLong: string; unreadable: string }
+  errors: { tooLong: string; unreadable: string },
+  schema: Record<string, unknown> = ORDER_SCHEMA
 ): Promise<ParsedOrder> {
   if (!process.env.ANTHROPIC_API_KEY) throw new MissingAnthropicKeyError()
 
@@ -91,7 +126,7 @@ async function extractOrder(
     system,
     output_config: {
       effort: 'medium',
-      format: { type: 'json_schema', schema: ORDER_SCHEMA },
+      format: { type: 'json_schema', schema },
     },
     messages: [{ role: 'user', content }],
   })
@@ -133,22 +168,65 @@ export async function parseAmazonOrderScreenshots(
   )
 }
 
-/** Reads an order from the visible text of its "Order Details" page. */
-export async function parseAmazonOrderText(pageText: string, url?: string): Promise<ParsedOrder> {
+const normalizeTitle = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+/**
+ * Keeps an item's ASIN only if the page actually linked to it — Claude picks
+ * from the list, but a made-up or mistyped id must never reach the catalog.
+ * Items left without one get it when exactly one link carries their title.
+ */
+export function resolveItemAsins(
+  items: ParsedOrderItem[],
+  links: PageProductLink[]
+): ParsedOrderItem[] {
+  const onPage = new Set(links.map((l) => l.asin))
+  return items.map((item) => {
+    if (item.asin && onPage.has(item.asin)) return item
+
+    const title = normalizeTitle(item.fullTitle || item.name)
+    const candidates = new Set(
+      links
+        .filter((l) => {
+          const text = normalizeTitle(l.title)
+          // A shortened link text still has to be long enough to mean something.
+          return text.length >= 15 && (title === text || title.startsWith(text))
+        })
+        .map((l) => l.asin)
+    )
+    return { ...item, asin: candidates.size === 1 ? [...candidates][0] : null }
+  })
+}
+
+/**
+ * Reads an order from the visible text of its "Order Details" page. With the
+ * page's product links, each item also comes back with its ASIN.
+ */
+export async function parseAmazonOrderText(
+  pageText: string,
+  url?: string,
+  links: PageProductLink[] = []
+): Promise<ParsedOrder> {
   const text = pageText.trim().slice(0, MAX_PAGE_TEXT_CHARS)
   if (!text) throw new Error('The page had no text to read')
 
-  return extractOrder(
+  const linkList = links.map((l) => `${l.asin} — ${l.title || '(no text)'}`).join('\n')
+
+  const order = await extractOrder(
     TEXT_EXTRACTION_SYSTEM_PROMPT,
     [
       {
         type: 'text',
-        text: `Extract the order from this page${url ? ` (${url})` : ''}.\n\n<page>\n${text}\n</page>`,
+        text:
+          `Extract the order from this page${url ? ` (${url})` : ''}.` +
+          `\n\n<page>\n${text}\n</page>` +
+          `\n\n<product_links>\n${linkList || '(none found)'}\n</product_links>`,
       },
     ],
     {
       tooLong: 'That order was too long to read in one pass',
       unreadable: 'Could not read an order from that page',
-    }
+    },
+    ORDER_WITH_ASIN_SCHEMA
   )
+  return { ...order, items: resolveItemAsins(order.items, links) }
 }

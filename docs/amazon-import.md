@@ -98,6 +98,15 @@ Setup (once):
 To update the extension after pulling changes, press the reload icon on its
 card in `chrome://extensions` and reload the Amazon tab.
 
+Each item also carries its **ASIN**. The extension collects every product
+link on the page (`/dp/<ASIN>` and its link text); Claude assigns each item the
+ASIN of the link that carries its title, and the server drops any ASIN that
+isn't among the page's links. On import, each line's ASIN is saved as a
+`ProductAlias` of the product it was imported into — so the next order with
+that ASIN maps straight onto the product (*Known ASIN* in the form), whatever
+its listing title says. Re-mapping a line by hand before importing corrects the
+alias.
+
 Sending text rather than parsing the HTML means Amazon reshuffling its markup
 doesn't break the import. Card digits ("ending in 1234") are masked before
 sending; the rest of the page, including the shipping address, reaches Claude.

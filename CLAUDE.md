@@ -51,7 +51,9 @@ missing-config error almost always means a missing env var, not a code bug.
 - **`lib/imports/`** — `amazon-order.ts` (types + total reconciliation, dependency-free),
   `amazon-screenshot.ts` (Claude extraction from screenshots or page text, server only),
   `match-product.ts`. An `ImportDraft` never touches stock: importing it goes through
-  `importPurchases`, which marks it `IMPORTED` in the same transaction.
+  `importPurchases`, which marks it `IMPORTED` in the same transaction and saves each
+  line's ASIN as a `ProductAlias` (supplier + ASIN → product); drafts map known ASINs
+  first, then fall back to `matchProduct` by name.
 - **`lib/purchases.ts`** — read side of purchases, grouped by `PurchaseOrder` (the
   supplier order) rather than by line.
 - **`lib/metrics.ts`** (dashboard) and **`lib/reports.ts`** (reports + CSV) — read aggregates.

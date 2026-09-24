@@ -114,6 +114,11 @@ export function ScannedOrderReview({ order, warnings, onDismiss }: Props) {
                         {t('soldBy', { seller: item.seller })}
                       </span>
                     )}
+                    {item.asin && (
+                      <span className="block font-mono text-xs text-muted-foreground">
+                        ASIN {item.asin}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{item.quantity}</TableCell>
                   <TableCell className="text-right tabular-nums">

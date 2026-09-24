@@ -180,6 +180,7 @@ model Product {
   movements  InventoryMovement[]
   listings   MlListing[]
   candidates OpportunityCandidate[]
+  aliases    ProductAlias[]
 
   @@index([archived])
   @@map("products")
@@ -213,6 +214,27 @@ model PurchaseOrder {
   @@unique([supplier, orderNumber])
   @@index([purchasedAt])
   @@map("purchase_orders")
+}
+
+/// A supplier's own id for one of our products — for Amazon, the ASIN. Learnt
+/// on import: once an order line carrying an ASIN is imported against a
+/// product, the next order with that ASIN maps onto it without guessing by
+/// name. The latest import wins, so re-mapping a line corrects the alias.
+model ProductAlias {
+  id         String   @id @default(cuid())
+  supplier   String
+  /// The supplier's id — the ASIN for Amazon.
+  externalId String
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Listing title when the alias was learnt, for reference.
+  title      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([supplier, externalId])
+  @@index([productId])
+  @@map("product_aliases")
 }
 
 /// Where an `ImportDraft` stands. Only PENDING drafts show up for review.

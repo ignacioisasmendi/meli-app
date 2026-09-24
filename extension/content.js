@@ -17,14 +17,26 @@
       .slice(0, MAX_TEXT)
   }
 
-  /** One entry per distinct ASIN linked from the page, with the best title found. */
+  // Button-style links that also point at a product page; their text is never a title.
+  const GENERIC_LINK =
+    /^(buy it again|view your item|write a (product )?review|track package|return or replace|get product support|comprar de nuevo|ver tu art)/i
+
+  /**
+   * One entry per distinct ASIN linked from the page, with its title. Each item
+   * row links to its product page from the thumbnail (no text), the title and
+   * buttons like "Buy it again"; the longest non-button text is the title.
+   * Recommendation carousels add ASINs that aren't in the order — the server
+   * only keeps an ASIN whose title matches an item it read.
+   */
   function productLinks() {
     const byAsin = new Map()
     for (const a of document.querySelectorAll('a[href*="/dp/"], a[href*="/gp/product/"]')) {
-      const match = a.getAttribute('href').match(ASIN_IN_URL)
+      const match = (a.getAttribute('href') || '').match(ASIN_IN_URL)
       if (!match) continue
       const asin = match[1]
-      const title = (a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500)
+      let title = (a.textContent || '').replace(/\s+/g, ' ').trim()
+      if (GENERIC_LINK.test(title)) title = ''
+      title = title.slice(0, 500)
       const current = byAsin.get(asin)
       if (!current || title.length > current.title.length) byAsin.set(asin, { asin, title })
     }
