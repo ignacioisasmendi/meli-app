@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>MeliApp — Amazon import</title>
+    <style>
+      body { font: 14px/1.5 system-ui, -apple-system, sans-serif; max-width: 520px;
+        margin: 40px auto; padding: 0 16px; color: #111; }
+      label { display: block; font-weight: 600; margin: 16px 0 4px; }
+      input { width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit;
+        border: 1px solid #bbb; border-radius: 6px; }
+      .hint { color: #666; font-size: 12px; margin-top: 4px; }
+      .actions { margin-top: 20px; display: flex; gap: 8px; }
+      button { padding: 8px 14px; font: inherit; border-radius: 6px; border: 1px solid #2d3277;
+        background: #2d3277; color: #fff; cursor: pointer; }
+      button.secondary { background: #fff; color: #2d3277; }
+      #status { margin-top: 16px; }
+      .ok { color: #2e7d32; } .error { color: #c62828; }
+    </style>
+  </head>
+  <body>
+    <h1>MeliApp — Amazon import</h1>
+    <p>Desde la página <em>Order Details</em> de Amazon, el botón “Enviar al CRM” manda la orden a tu CRM como borrador.</p>
+
+    <label for="crmUrl">URL del CRM</label>
+    <input id="crmUrl" type="url" placeholder="https://tu-crm.vercel.app" />
+    <div class="hint">La misma dirección con la que abrís el CRM en el navegador.</div>
+
+    <label for="token">Token</label>
+    <input id="token" type="password" autocomplete="off" />
+    <div class="hint">El valor de <code>EXTENSION_TOKEN</code> configurado en el servidor.</div>
+
+    <div class="actions">
+      <button id="save" type="button">Guardar</button>
+      <button id="test" type="button" class="secondary">Probar conexión</button>
+    </div>
+    <div id="status"></div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

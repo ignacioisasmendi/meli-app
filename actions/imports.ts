@@ -2,7 +2,13 @@
 
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { BatchStatus, Prisma, PurchaseStatus, ShipmentStatus } from '@prisma/client'
+import {
+  BatchStatus,
+  ImportDraftStatus,
+  Prisma,
+  PurchaseStatus,
+  ShipmentStatus,
+} from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireUser } from '@/lib/session'
 import { applyPurchase, recomputeAverageCost, statusOnArrival } from '@/lib/inventory/stock'
@@ -38,6 +44,8 @@ const importSchema = z.object({
   /** Box these lines travel in. Its freight is applied later, on arrival. */
   shipmentId: z.string().optional().or(z.literal('')),
   lines: z.array(lineSchema).min(1, 'Add at least one line'),
+  /** The `ImportDraft` this import came from, marked imported once it lands. */
+  draftId: z.string().optional(),
 })
 
 export type ImportPayload = z.infer<typeof importSchema>
@@ -224,8 +232,20 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
   const prepared = await prepareOrder(parsed.data)
   if (typeof prepared === 'string') return { ok: false, error: prepared }
 
+  const { draftId } = parsed.data
   try {
-    await prisma.$transaction((tx) => recordOrder(tx, prepared, new Map()))
+    await prisma.$transaction(async (tx) => {
+      await recordOrder(tx, prepared, new Map())
+      // In the same transaction, so a draft can't be imported twice by two
+      // tabs racing each other — the second one finds it no longer pending.
+      if (draftId) {
+        const { count } = await tx.importDraft.updateMany({
+          where: { id: draftId, status: ImportDraftStatus.PENDING },
+          data: { status: ImportDraftStatus.IMPORTED, importedAt: new Date() },
+        })
+        if (count === 0) throw new Error('That draft was already imported or discarded')
+      }
+    })
   } catch (err) {
     console.error('[purchase import] failed:', err)
     return {
@@ -242,6 +262,23 @@ export async function importPurchases(payload: ImportPayload): Promise<ActionRes
   )
 
   revalidateImport([prepared.shipmentId])
+  if (draftId) revalidatePath('/purchases/import')
+  return { ok: true }
+}
+
+/** Drops a captured order that shouldn't be imported (a personal purchase, a duplicate). */
+export async function discardImportDraft(id: string): Promise<ActionResult> {
+  await requireUser()
+  const parsed = z.string().min(1).safeParse(id)
+  if (!parsed.success) return { ok: false, error: 'Invalid draft' }
+
+  const { count } = await prisma.importDraft.updateMany({
+    where: { id: parsed.data, status: ImportDraftStatus.PENDING },
+    data: { status: ImportDraftStatus.DISCARDED },
+  })
+  if (count === 0) return { ok: false, error: 'That draft was already imported or discarded' }
+
+  revalidatePath('/purchases/import')
   return { ok: true }
 }
 

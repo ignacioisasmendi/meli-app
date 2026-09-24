@@ -19,7 +19,7 @@ npm run prisma:seed    # demo data
 `.env.local` is git-ignored. Required names are in `.env.example`:
 `APP_BASE_URL AUTH0_* DATABASE_URL DIRECT_URL TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
 ML_CLIENT_ID ML_CLIENT_SECRET ML_REDIRECT_URI CRON_SECRET USD_ARS_RATE
-ANTHROPIC_API_KEY`. A
+ANTHROPIC_API_KEY EXTENSION_TOKEN`. A
 missing-config error almost always means a missing env var, not a code bug.
 
 ## Architecture
@@ -29,8 +29,11 @@ missing-config error almost always means a missing env var, not a code bug.
   Return `ActionResult` (`{ ok: true } | { ok: false; error }`); client shows a toast.
 - **`app/api/*`** — Route Handlers: `mercadolibre/{connect,callback}`,
   `webhooks/mercadolibre`, `cron/{refresh-tokens,daily-summary}`, `reports/[type]` (CSV),
-  `imports/parse-screenshot` (Claude vision → draft purchase lines; see `docs/amazon-import.md`).
-  Webhooks/cron/callback are excluded from the auth redirect in `middleware.ts`.
+  `imports/parse-screenshot` (Claude vision → draft purchase lines; see `docs/amazon-import.md`),
+  `imports/extension` (the browser extension in `extension/` posts an order page's text →
+  `ImportDraft`, reviewed at `/purchases/import?draft=…`).
+  Webhooks/cron/callback/extension are excluded from the auth redirect in `middleware.ts`;
+  the extension route checks `EXTENSION_TOKEN` itself.
 - **`lib/inventory/`** — `stock.ts` (the single source of truth for stock math:
   `applyPurchase`/`applySale`/`applyAdjustment`, FIFO batch consumption, transactional
   movements) and `profit.ts`. **Don't mutate Product stock counters outside these.**
@@ -46,7 +49,9 @@ missing-config error almost always means a missing env var, not a code bug.
   `processClaim` = returns/refunds; `syncAccountListings`).
 - **`lib/telegram/`** — `client.ts` (`sendTelegramMessage`, never throws) + `messages.ts`.
 - **`lib/imports/`** — `amazon-order.ts` (types + total reconciliation, dependency-free),
-  `amazon-screenshot.ts` (Claude vision extraction, server only), `match-product.ts`.
+  `amazon-screenshot.ts` (Claude extraction from screenshots or page text, server only),
+  `match-product.ts`. An `ImportDraft` never touches stock: importing it goes through
+  `importPurchases`, which marks it `IMPORTED` in the same transaction.
 - **`lib/purchases.ts`** — read side of purchases, grouped by `PurchaseOrder` (the
   supplier order) rather than by line.
 - **`lib/metrics.ts`** (dashboard) and **`lib/reports.ts`** (reports + CSV) — read aggregates.

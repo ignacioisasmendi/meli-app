@@ -11,10 +11,12 @@ export async function middleware(request: NextRequest) {
     return authRes
   }
 
-  // ML webhooks and cron jobs authenticate themselves — no user session required.
+  // ML webhooks, cron jobs and the browser extension authenticate themselves —
+  // no user session required.
   if (
     pathname.startsWith('/api/webhooks') ||
     pathname.startsWith('/api/cron') ||
+    pathname.startsWith('/api/imports/extension') ||
     pathname.startsWith('/api/mercadolibre/callback')
   ) {
     return authRes

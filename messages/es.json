@@ -305,7 +305,21 @@
     "arrivalDate": "Llegada al courier",
     "perUnitWithTax": "{value} c/u con imp.",
     "bulkImport": "Importación masiva (JSON)",
-    "estimatedArrival": "Llegada estimada"
+    "estimatedArrival": "Llegada estimada",
+    "draftUnavailable": "Esa orden capturada ya fue importada o descartada."
+  },
+  "ImportDrafts": {
+    "title": "{count, plural, one {# orden capturada para revisar} other {# órdenes capturadas para revisar}}",
+    "description": "Enviadas desde Amazon con la extensión del navegador. Abrí una para revisarla en el formulario de abajo — no se guarda nada hasta que la importes.",
+    "order": "Orden {orderNumber}",
+    "noOrderNumber": "No se encontró número de orden",
+    "itemCount": "{count, plural, one {# artículo} other {# artículos}}",
+    "captured": "capturada el {date}",
+    "warnings": "{count, plural, one {# total no cierra} other {# totales no cierran}}",
+    "review": "Revisar",
+    "discard": "Descartar",
+    "discarded": "Borrador descartado",
+    "openOnAmazon": "Abrir en Amazon"
   },
   "PurchaseForm": {
     "registerPurchase": "Registrar compra",
