@@ -104,7 +104,7 @@ export function ScannedOrderReview({ order, warnings, onDismiss }: Props) {
             <TableBody>
               {order.items.map((item, i) => (
                 <TableRow key={`${item.name}-${i}`}>
-                  <TableCell className="max-w-md">
+                  <TableCell className="max-w-md whitespace-normal">
                     <span className="font-medium">{item.name}</span>
                     {item.fullTitle !== item.name && (
                       <span className="block text-xs text-muted-foreground">{item.fullTitle}</span>

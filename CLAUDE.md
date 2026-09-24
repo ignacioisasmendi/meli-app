@@ -30,8 +30,9 @@ missing-config error almost always means a missing env var, not a code bug.
 - **`app/api/*`** — Route Handlers: `mercadolibre/{connect,callback}`,
   `webhooks/mercadolibre`, `cron/{refresh-tokens,daily-summary}`, `reports/[type]` (CSV),
   `imports/parse-screenshot` (Claude vision → draft purchase lines; see `docs/amazon-import.md`),
-  `imports/extension` (the browser extension in `extension/` posts an order page's text →
-  `ImportDraft`, reviewed at `/purchases/import?draft=…`).
+  `imports/extension` (the browser extension in `extension/` reads the order off the Amazon
+  page's DOM — `parse-order.js`, no AI — and posts it → `ImportDraft`, reviewed at
+  `/purchases/import?draft=…`).
   Webhooks/cron/callback/extension are excluded from the auth redirect in `middleware.ts`;
   the extension route checks `EXTENSION_TOKEN` itself.
 - **`lib/inventory/`** — `stock.ts` (the single source of truth for stock math:
@@ -49,7 +50,7 @@ missing-config error almost always means a missing env var, not a code bug.
   `processClaim` = returns/refunds; `syncAccountListings`).
 - **`lib/telegram/`** — `client.ts` (`sendTelegramMessage`, never throws) + `messages.ts`.
 - **`lib/imports/`** — `amazon-order.ts` (types + total reconciliation, dependency-free),
-  `amazon-screenshot.ts` (Claude extraction from screenshots or page text, server only),
+  `amazon-screenshot.ts` (Claude vision extraction, server only),
   `match-product.ts`. An `ImportDraft` never touches stock: importing it goes through
   `importPurchases`, which marks it `IMPORTED` in the same transaction and saves each
   line's ASIN as a `ProductAlias` (supplier + ASIN → product); drafts map known ASINs
