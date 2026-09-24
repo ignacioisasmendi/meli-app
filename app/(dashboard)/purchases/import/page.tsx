@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Button } from '@/components/ui/button'
 import { ImportDrafts } from '@/components/purchases/import-drafts'
-import { PurchaseImport } from '@/components/purchases/purchase-import'
+import { PurchaseImport, type ImportDraftInput } from '@/components/purchases/purchase-import'
 import type { OrderWarning, ParsedOrder } from '@/lib/imports/amazon-order'
 
 export const dynamic = 'force-dynamic'
@@ -38,10 +38,23 @@ export default async function ImportPurchasesPage({
   ])
 
   const draftRow = draftId ? drafts.find((d) => d.id === draftId) : undefined
-  const draft = draftRow && {
-    id: draftRow.id,
-    order: draftRow.order as unknown as ParsedOrder,
-    warnings: draftRow.warnings as unknown as OrderWarning[],
+  let draft: ImportDraftInput | undefined
+  if (draftRow) {
+    const order = draftRow.order as unknown as ParsedOrder
+    // ASINs imported before already know their product — no guessing by name.
+    const asins = order.items.map((i) => i.asin).filter((a): a is string => !!a)
+    const aliases = asins.length
+      ? await prisma.productAlias.findMany({
+          where: { supplier: draftRow.supplier, externalId: { in: asins } },
+          select: { externalId: true, productId: true },
+        })
+      : []
+    draft = {
+      id: draftRow.id,
+      order,
+      warnings: draftRow.warnings as unknown as OrderWarning[],
+      knownAsins: Object.fromEntries(aliases.map((a) => [a.externalId, a.productId])),
+    }
   }
 
   return (

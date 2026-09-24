@@ -306,7 +306,8 @@
     "perUnitWithTax": "{value}/unit with tax",
     "bulkImport": "Bulk import (JSON)",
     "estimatedArrival": "Estimated arrival",
-    "draftUnavailable": "That captured order was already imported or discarded."
+    "draftUnavailable": "That captured order was already imported or discarded.",
+    "matchedByAsin": "Known ASIN"
   },
   "ImportDrafts": {
     "title": "{count, plural, one {# captured order to review} other {# captured orders to review}}",

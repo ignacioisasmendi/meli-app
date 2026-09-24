@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslations } from 'next-intl'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -48,6 +49,10 @@ interface DraftLine {
   name: string
   quantity: string
   unitPrice: string
+  /** The item's Amazon ASIN, when the order came with one — imported as an alias. */
+  asin?: string
+  /** How the product was picked: a known ASIN is certain, a name match is a guess. */
+  matchedBy?: 'asin' | 'name'
 }
 
 const emptyLine = (): DraftLine => ({
@@ -60,33 +65,37 @@ const emptyLine = (): DraftLine => ({
 })
 
 /**
- * Draft lines for a scanned order. Items that clearly match an existing product
- * are mapped onto it; the rest become new products with a suggested SKU.
+ * Draft lines for a scanned order. An item whose ASIN was imported before maps
+ * onto that product; otherwise one that clearly matches an existing product by
+ * name is mapped onto it; the rest become new products with a suggested SKU.
  */
-function linesFromOrder(order: ParsedOrder, products: ProductOption[]): DraftLine[] {
+function linesFromOrder(
+  order: ParsedOrder,
+  products: ProductOption[],
+  knownAsins: Record<string, string> = {}
+): DraftLine[] {
   const taken = new Set(products.map((p) => p.sku.toUpperCase()))
   return order.items.map((item): DraftLine => {
-    const match = matchProduct(item.fullTitle || item.name, products)
+    const common = {
+      quantity: String(item.quantity),
+      unitPrice: String(item.unitPrice),
+      asin: item.asin ?? undefined,
+    }
+    const byAsin = item.asin ? products.find((p) => p.id === knownAsins[item.asin!]) : undefined
+    const match = byAsin ?? matchProduct(item.fullTitle || item.name, products)
     if (match) {
       return {
+        ...common,
         mode: 'existing',
         productId: match.id,
         sku: '',
         name: match.name,
-        quantity: String(item.quantity),
-        unitPrice: String(item.unitPrice),
+        matchedBy: byAsin ? 'asin' : 'name',
       }
     }
     const sku = suggestSku(item.name, taken)
     taken.add(sku)
-    return {
-      mode: 'new',
-      productId: '',
-      sku,
-      name: item.name,
-      quantity: String(item.quantity),
-      unitPrice: String(item.unitPrice),
-    }
+    return { ...common, mode: 'new', productId: '', sku, name: item.name }
   })
 }
 
@@ -95,6 +104,8 @@ export interface ImportDraftInput {
   id: string
   order: ParsedOrder
   warnings: OrderWarning[]
+  /** ASIN → product id, for the draft's ASINs already imported before. */
+  knownAsins: Record<string, string>
 }
 
 const num = (s: string) => {
@@ -130,7 +141,9 @@ export function PurchaseImport({
   const [shipping, setShipping] = useState(initial?.shipping != null ? String(initial.shipping) : '')
   const [shipmentId, setShipmentId] = useState(NO_SHIPMENT)
   const [lines, setLines] = useState<DraftLine[]>(() =>
-    initial && initial.items.length > 0 ? linesFromOrder(initial, products) : [emptyLine()]
+    initial && initial.items.length > 0
+      ? linesFromOrder(initial, products, draft.knownAsins)
+      : [emptyLine()]
   )
   const [scanned, setScanned] = useState<{ order: ParsedOrder; warnings: OrderWarning[] } | null>(
     draft ? { order: draft.order, warnings: draft.warnings } : null
@@ -195,6 +208,7 @@ export function PurchaseImport({
         name: l.name.trim(),
         quantity: num(l.quantity),
         unitPrice: num(l.unitPrice),
+        asin: l.asin,
       })),
     }
     startTransition(async () => {
@@ -385,17 +399,30 @@ export function PurchaseImport({
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
-                  <Label>{t('mapTo')}</Label>
+                  <Label className="flex flex-wrap items-center gap-2">
+                    {t('mapTo')}
+                    {line.asin && (
+                      <span className="font-mono text-xs font-normal text-muted-foreground">
+                        ASIN {line.asin}
+                      </span>
+                    )}
+                    {line.matchedBy === 'asin' && (
+                      <Badge variant="secondary" className="font-normal">
+                        {t('matchedByAsin')}
+                      </Badge>
+                    )}
+                  </Label>
                   <ProductPicker
                     products={products}
                     value={line.mode === 'existing' ? line.productId : NEW_PRODUCT}
                     onChange={(v) =>
                       v === NEW_PRODUCT
-                        ? patch(i, { mode: 'new' })
+                        ? patch(i, { mode: 'new', matchedBy: undefined })
                         : patch(i, {
                             mode: 'existing',
                             productId: v,
                             name: products.find((p) => p.id === v)?.name ?? line.name,
+                            matchedBy: undefined,
                           })
                     }
                   />

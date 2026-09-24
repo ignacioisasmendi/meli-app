@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
 
   let order
   try {
-    order = await parseAmazonOrderText(text, url)
+    order = await parseAmazonOrderText(text, url, items)
   } catch (err) {
     if (err instanceof MissingAnthropicKeyError) {
       return bad('ANTHROPIC_API_KEY is not configured on the server', 503)

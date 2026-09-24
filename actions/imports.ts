@@ -15,6 +15,7 @@ import { applyPurchase, recomputeAverageCost, statusOnArrival } from '@/lib/inve
 import { allocateOrder } from '@/lib/inventory/landed'
 import { SHIPMENT_TO_BATCH_STATUS } from '@/lib/inventory/shipment-costing'
 import { sendTelegramMessage } from '@/lib/telegram/client'
+import { ASIN_PATTERN } from '@/lib/imports/amazon-order'
 import { MAX_BULK_ORDERS } from '@/lib/imports/bulk-orders'
 import type { ActionResult } from '@/actions/products'
 
@@ -26,6 +27,8 @@ const lineSchema = z
     name: z.string().trim().min(1, 'Product name is required'),
     quantity: z.coerce.number().int().positive('Quantity must be positive'),
     unitPrice: z.coerce.number().positive('Unit price must be positive'),
+    /** The supplier's id for the item (Amazon ASIN) — learnt as an alias of its product. */
+    asin: z.string().regex(ASIN_PATTERN, 'Invalid ASIN').optional(),
   })
   .refine((l) => (l.mode === 'existing' ? !!l.productId : !!l.sku), {
     message: 'Each line needs a product (or a SKU to create one)',
@@ -154,6 +157,17 @@ async function recordOrder(
     } else {
       const product = await tx.product.findUnique({ where: { id: productId } })
       if (!product) throw new Error('A selected product no longer exists')
+    }
+
+    // Remember which product this ASIN turned out to be, so the next order
+    // with it maps straight onto the product. The latest import wins: a line
+    // re-mapped by hand corrects an alias learnt wrong.
+    if (line.asin) {
+      await tx.productAlias.upsert({
+        where: { supplier_externalId: { supplier, externalId: line.asin } },
+        create: { supplier, externalId: line.asin, productId: productId!, title: line.name },
+        update: { productId: productId! },
+      })
     }
 
     const purchase = await tx.purchase.create({
