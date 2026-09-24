@@ -77,19 +77,46 @@ through claude.ai.
 ## C. One click from the Amazon page (browser extension)
 
 The extension in `extension/` adds an **Enviar al CRM** button to Amazon's
-"Order Details" page. It sends the page's visible text (not a screenshot, not
-the HTML) plus the ASINs of the linked products to `/api/imports/extension`,
-which reads the order with Claude and parks it as an **ImportDraft**. A Telegram
-message links straight to it; it also shows up at the top of
-**Purchases → Import** under *captured orders to review*. Opening one pre-fills
-the form below; **Import** works exactly as for the other two paths and marks
-the draft imported. Pressing the button again on the same order answers
-"already imported" / "already waiting for review" without another extraction.
+"Order Details" page. It reads the order **straight from the page** — no AI,
+no screenshot — and sends it to `/api/imports/extension`, which checks the
+totals and parks it as an **ImportDraft**. A Telegram message links straight
+to it; it also shows up at the top of **Purchases → Import** under *captured
+orders to review*. Opening one pre-fills the form below; **Import** works
+exactly as for the other two paths and marks the draft imported. Pressing the
+button again on the same order answers "already imported" / "already waiting
+for review".
+
+What is read, and from where (`extension/parse-order.js`):
+
+| Field | Where on the page |
+| --- | --- |
+| Order number | the URL's `orderID`, else `[data-component="orderId"]` |
+| Order date | `[data-component="orderDate"]`, else the text after "Order placed" |
+| Items | each `[data-component="itemTitle"] a` — the link text is the title, its `/dp/<ASIN>` the ASIN |
+| Quantity | the badge over the thumbnail (`.od-item-view-qty`), else "Qty: N", else 1 |
+| Unit price | `[data-component="unitPrice"] .a-offscreen` |
+| Seller | the "Sold by:" line |
+| Subtotal, tax, shipping, grand total | the Order Summary rows, by label ("Item(s) Subtotal:", "Estimated tax to be collected:", "Shipping & Handling:" net of "Free Shipping:", "Grand Total:") |
+
+Each field falls back to a looser lookup (older `yohtmlc-*` markup, then the
+printed label) when the specific markup isn't there. If an item has no price,
+the button says what's missing and sends nothing. Promotions and coupons aren't
+split across the items: the grand total then won't match, and the draft shows
+it as a warning to fix by hand. The item's short **name** is the listing title
+up to its first comma or dash ("DJI Mic Mini (1 TX + 1 RX), Wireless…" → "DJI
+Mic Mini (1 TX + 1 RX)"); it only matters for new products, and it's editable.
+
+On import, each line's **ASIN** is saved as a `ProductAlias` of the product it
+was imported into — so the next order with that ASIN maps straight onto the
+product (*Known ASIN* in the form), whatever its listing title says. Re-mapping
+a line by hand before importing corrects the alias.
+
+Nothing but the order itself leaves the page: no address, no payment method.
 
 Setup (once):
 
-1. Set `EXTENSION_TOKEN` (and `ANTHROPIC_API_KEY`) on the server —
-   `openssl rand -hex 32` gives a good token.
+1. Set `EXTENSION_TOKEN` on the server — `openssl rand -hex 32` gives a good
+   token.
 2. In Chrome, open `chrome://extensions`, turn on **Developer mode**, press
    **Load unpacked** and pick the `extension/` folder.
 3. The options page opens from the extension's toolbar icon: enter the CRM's
@@ -98,18 +125,9 @@ Setup (once):
 To update the extension after pulling changes, press the reload icon on its
 card in `chrome://extensions` and reload the Amazon tab.
 
-Each item also carries its **ASIN**. The extension collects every product
-link on the page (`/dp/<ASIN>` and its link text); Claude assigns each item the
-ASIN of the link that carries its title, and the server drops any ASIN that
-isn't among the page's links. On import, each line's ASIN is saved as a
-`ProductAlias` of the product it was imported into — so the next order with
-that ASIN maps straight onto the product (*Known ASIN* in the form), whatever
-its listing title says. Re-mapping a line by hand before importing corrects the
-alias.
-
-Sending text rather than parsing the HTML means Amazon reshuffling its markup
-doesn't break the import. Card digits ("ending in 1234") are masked before
-sending; the rest of the page, including the shipping address, reaches Claude.
+If Amazon changes the page and a field stops being read, the fix is in
+`extension/parse-order.js`: save the order page (Ctrl+S) and adjust the
+selector for that field.
 
 ## What gets checked
 

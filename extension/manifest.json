@@ -1,20 +1,27 @@
 {
   "manifest_version": 3,
   "name": "MeliApp — Amazon import",
-  "version": "0.2.0",
-  "description": "Sends an Amazon order to the MeliApp CRM as a purchase draft, ready to review and import.",
-  "permissions": ["storage"],
-  "optional_host_permissions": ["https://*/*", "http://localhost/*"],
+  "version": "0.3.0",
+  "description": "Reads an Amazon order from its Order Details page and sends it to the MeliApp CRM as a purchase draft, ready to review and import.",
+  "permissions": [
+    "storage"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
       "matches": [
-        "https://www.amazon.com/*order-details*",
-        "https://www.amazon.com/gp/css/summary/*"
+        "https://www.amazon.com/*"
       ],
-      "js": ["content.js"]
+      "js": [
+        "parse-order.js",
+        "content.js"
+      ]
     }
   ],
   "options_ui": {
